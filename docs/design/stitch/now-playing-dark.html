@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/><meta content="mobile_stack" name="shell-type"/><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{width:100vw;margin:0;padding:0;background-color:#0d0e11;}body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent;}.pb-safe{padding-bottom:env(safe-area-inset-bottom,0px);}.pt-safe{padding-top:env(safe-area-inset-top,0px);}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { colors: { "surface-tint": "#f0be7b", "tertiary-fixed-dim": "#c8c6c1", "outline": "#9c8f80", "error-container": "#93000a", "surface": "#121316", "surface-variant": "#343538", "primary-fixed-dim": "#f0be7b", "on-primary": "#452b00", "error": "#ffb4ab", "on-tertiary-fixed": "#1b1c18", "on-tertiary-fixed-variant": "#474743", "on-surface": "#e3e2e6", "on-tertiary-container": "#4a4a46", "secondary-container": "#af8d11", "primary": "#ffcd8b", "surface-bright": "#38393c", "on-secondary-fixed-variant": "#574500", "tertiary-container": "#bbbab4", "secondary": "#e9c349", "primary-fixed": "#ffddb4", "tertiary-fixed": "#e4e2dc", "surface-container": "#1f1f23", "on-secondary-container": "#342800", "secondary-fixed": "#ffe088", "on-error-container": "#ffdad6", "on-primary-fixed": "#291800", "primary-container": "#e2b170", "on-secondary": "#3c2f00", "outline-variant": "#4f4539", "surface-container-lowest": "#0d0e11", "inverse-surface": "#e3e2e6", "surface-dim": "#121316", "on-secondary-fixed": "#241a00", "background": "#121316", "on-primary-container": "#65430b", "on-tertiary": "#30312d", "inverse-on-surface": "#303034", "tertiary": "#d7d5d0", "surface-container-low": "#1b1b1f", "on-error": "#690005", "on-primary-fixed-variant": "#624007", "surface-container-highest": "#343538", "on-background": "#e3e2e6", "on-surface-variant": "#d3c4b5", "inverse-primary": "#7d571f", "surface-container-high": "#292a2d", "secondary-fixed-dim": "#e9c349" }, borderRadius: { "DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px" }, spacing: { "space-md": "1rem", "space-xs": "0.25rem", "space-sm": "0.5rem", "gutter-mobile": "1rem", "space-xl": "3rem", "space-lg": "1.75rem", "margin": "3rem", "margin-mobile": "1.25rem", "gutter": "1.5rem" }, fontFamily: { "headline-lg": ["Plus Jakarta Sans"], "headline-lg-mobile": ["Plus Jakarta Sans"], "body-sm": ["Plus Jakarta Sans"], "display-hero": ["Plus Jakarta Sans"], "label-caps": ["Plus Jakarta Sans"], "headline-sm": ["Plus Jakarta Sans"], "body-md": ["Plus Jakarta Sans"], "label-mono-sm": ["JetBrains Mono"], "body-lg": ["Plus Jakarta Sans"], "display-hero-mobile": ["Plus Jakarta Sans"], "label-mono-md": ["JetBrains Mono"], "headline-md": ["Plus Jakarta Sans"] }, fontSize: { "headline-lg": ["36px", { lineHeight: "44px", letterSpacing: "-0.02em", fontWeight: "400" }], "headline-lg-mobile": ["28px", { lineHeight: "36px", letterSpacing: "-0.02em", fontWeight: "400" }], "body-sm": ["12px", { lineHeight: "18px", letterSpacing: "0.02em", fontWeight: "400" }], "display-hero": ["56px", { lineHeight: "64px", letterSpacing: "-0.03em", fontWeight: "300" }], "label-caps": ["11px", { lineHeight: "16px", letterSpacing: "0.12em", fontWeight: "600" }], "headline-sm": ["18px", { lineHeight: "26px", letterSpacing: "-0.01em", fontWeight: "600" }], "body-md": ["14px", { lineHeight: "22px", letterSpacing: "0.01em", fontWeight: "400" }], "label-mono-sm": ["10px", { lineHeight: "14px", letterSpacing: "0.08em", fontWeight: "500" }], "body-lg": ["16px", { lineHeight: "26px", letterSpacing: "0em", fontWeight: "400" }], "display-hero-mobile": ["36px", { lineHeight: "44px", letterSpacing: "-0.02em", fontWeight: "300" }], "label-mono-md": ["12px", { lineHeight: "16px", letterSpacing: "0.06em", fontWeight: "500" }], "headline-md": ["24px", { lineHeight: "32px", letterSpacing: "-0.015em", fontWeight: "500" }] } } } };</script><style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head><body class="bg-surface-container-lowest text-on-surface flex flex-col min-h-screen selection:bg-primary-container selection:text-on-primary-container antialiased"><header class="fixed top-0 w-full z-50 pt-safe bg-surface-container-lowest/80 backdrop-blur-xl"><div class="h-16 px-margin-mobile flex items-center justify-between"><button aria-label="Dismiss Player" class="w-11 h-11 -ml-2 flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors" onclick="history.back()"><span class="material-symbols-outlined text-[24px]">expand_more</span></button><div class="flex flex-col items-center justify-center text-center"><span class="font-label-caps text-label-caps tracking-[0.18em] text-on-surface-variant uppercase">PLAYING FROM ALBUM</span><span class="font-label-mono-sm text-label-mono-sm tracking-[0.06em] text-primary truncate max-w-[190px] mt-0.5 uppercase">Now Playing</span></div><div class="flex items-center gap-space-xs -mr-2"><button aria-label="Options" class="w-11 h-11 flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors"><span class="material-symbols-outlined text-[22px]">more_horiz</span></button><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></div></header><main class="flex-1 flex flex-col relative w-full pt-16 pb-safe bg-surface-container-lowest"><div class="flex flex-col w-full px-margin-mobile pb-space-lg select-none">
+<!-- Dynamic Glow & Album Art Container -->
+<div class="relative w-full max-w-[340px] aspect-square mx-auto mt-space-sm flex items-center justify-center">
+<!-- Amber/Obsidian Filament Halo -->
+<div class="absolute inset-4 rounded-[24px] bg-primary-container/20 blur-2xl -z-10 scale-95 opacity-60 pointer-events-none"></div>
+<!-- Artwork Shell with 24px radius and matte dark tactile shadow -->
+<div class="relative w-full h-full rounded-[24px] overflow-hidden bg-surface-container-high shadow-2xl transition-transform duration-500 hover:scale-[1.01]">
+<img class="w-full h-full object-cover" data-alt="Minimalist monolithic obsidian and matte limestone architectural sculpture floating in a cavernous dark ambient gallery space, warm amber filament edge light, hyper-clean brutalist lines, soft volumetric shadow, high-end fine art photography" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAD1iILiiCKfdfIjDyE18owY7BnLIt0SKfi0kH1H4FmXKpT3JILiqVp38hfEggnkgGVjwKYqOxGxBj6L70TjPxgB4KcE-FTYrCYgG3EM1ozo0PyzJuiWtUnGQqIbjQrLvNLDrXLAgm0B-Ja4pTGR_S-E3DD-6avtooxUyU5c2onpR9PoJXCqjdZJVCGCa2qGDbFa7-20nn1P2V_zEEL7f1R0slUORYGN5vficCj98aBx4Qc2wMrggIV"/>
+<!-- Subtle top inner reflection overlay -->
+<div class="absolute inset-0 bg-gradient-to-b from-white/10 via-transparent to-black/40 pointer-events-none"></div>
+</div>
+</div>
+<!-- Track Title, Favorite & Artist Meta -->
+<div class="flex flex-col mt-space-lg px-space-xs">
+<div class="flex items-center justify-between gap-space-sm">
+<div class="min-w-0">
+<h1 class="font-headline-md text-headline-md text-on-surface tracking-tight truncate">
+          Written on the Sky
+        </h1>
+</div>
+<button aria-label="Add to Favorites" class="w-10 h-10 -mr-1 flex items-center justify-center text-on-surface-variant hover:text-primary transition-colors active:scale-90" id="favorite-btn">
+<span class="material-symbols-outlined text-[24px]" id="favorite-icon">favorite</span>
+</button>
+</div>
+<div class="flex items-center justify-between mt-1">
+<p class="font-body-md text-body-md text-on-surface-variant truncate">
+        Max Richter — The Blue Notebooks
+      </p>
+<!-- Lossless Pill Indicator -->
+<div class="shrink-0 px-2.5 py-1 rounded-full bg-surface-container flex items-center gap-1.5 shadow-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+<span class="font-label-mono-sm text-label-mono-sm tracking-[0.08em] text-tertiary">96KHZ • 24-BIT LOSSLESS</span>
+</div>
+</div>
+</div>
+<!-- Precision Audio Scrubber -->
+<div class="flex flex-col mt-space-lg px-space-xs group cursor-pointer" id="scrubber-bar">
+<div class="relative w-full h-5 flex items-center">
+<!-- Background track -->
+<div class="w-full h-1 bg-surface-container-highest rounded-full overflow-hidden relative">
+<!-- Progress fill -->
+<div class="h-full bg-primary-container rounded-full w-[43%] transition-all duration-100 ease-linear" id="scrub-progress"></div>
+</div>
+<!-- Tactile Bead Indicator -->
+<div class="absolute left-[43%] -translate-x-1/2 w-3.5 h-3.5 rounded-full bg-on-surface shadow-md flex items-center justify-center transition-all duration-100 ease-linear group-active:scale-125" id="scrub-bead">
+<div class="w-1.5 h-1.5 rounded-full bg-surface-container-lowest"></div>
+</div>
+</div>
+<!-- Timestamp Row -->
+<div class="flex justify-between items-center -mt-0.5">
+<span class="font-label-mono-sm text-label-mono-sm text-on-surface-variant" id="time-current">01:40</span>
+<span class="font-label-mono-sm text-label-mono-sm text-on-surface-variant">03:52</span>
+</div>
+</div>
+<!-- Primary Playback Controls -->
+<div class="flex items-center justify-between px-space-xs mt-space-lg">
+<!-- Shuffle Button -->
+<button aria-label="Shuffle" class="w-11 h-11 flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors active:scale-95" id="shuffle-btn">
+<span class="material-symbols-outlined text-[22px]">shuffle</span>
+</button>
+<!-- Previous Button -->
+<button aria-label="Previous Track" class="w-12 h-12 flex items-center justify-center text-on-surface hover:text-primary transition-colors active:scale-90">
+<span class="material-symbols-outlined text-[32px]">skip_previous</span>
+</button>
+<!-- Main Circular Play/Pause Anchor Button -->
+<button aria-label="Pause" class="w-16 h-16 rounded-full bg-on-surface text-surface-container-lowest flex items-center justify-center shadow-lg active:scale-95 transition-transform" id="play-pause-btn">
+<span class="material-symbols-outlined text-[32px]" id="play-pause-icon" style="font-variation-settings: 'FILL' 1;">pause</span>
+</button>
+<!-- Next Button -->
+<button aria-label="Next Track" class="w-12 h-12 flex items-center justify-center text-on-surface hover:text-primary transition-colors active:scale-90">
+<span class="material-symbols-outlined text-[32px]">skip_next</span>
+</button>
+<!-- Repeat Button -->
+<button aria-label="Repeat" class="w-11 h-11 flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors active:scale-95" id="repeat-btn">
+<span class="material-symbols-outlined text-[22px]">repeat</span>
+</button>
+</div>
+<!-- Bottom Segmented Glass Action Strip -->
+<div class="w-full mt-space-lg">
+<div class="w-full h-12 rounded-full bg-surface-container-low flex items-center justify-around px-2 py-1 shadow-sm">
+<!-- Lyrics Action -->
+<button class="flex-1 h-full rounded-full flex items-center justify-center gap-1.5 text-on-surface-variant hover:text-on-surface active:bg-surface-container transition-all">
+<span class="material-symbols-outlined text-[18px]">lyrics</span>
+<span class="font-body-sm text-body-sm tracking-wide">Lyrics</span>
+</button>
+<!-- Hairline Spacer -->
+<div class="w-[1px] h-4 bg-surface-variant rounded-full"></div>
+<!-- Spatial 8D Action -->
+<button class="flex-1 h-full rounded-full flex items-center justify-center gap-1.5 text-primary active:bg-surface-container transition-all">
+<span class="material-symbols-outlined text-[18px]">surround_sound</span>
+<span class="font-body-sm text-body-sm font-semibold tracking-wide">Spatial 8D</span>
+</button>
+<!-- Hairline Spacer -->
+<div class="w-[1px] h-4 bg-surface-variant rounded-full"></div>
+<!-- Queue Action -->
+<button class="flex-1 h-full rounded-full flex items-center justify-center gap-1.5 text-on-surface-variant hover:text-on-surface active:bg-surface-container transition-all">
+<span class="material-symbols-outlined text-[18px]">queue_music</span>
+<span class="font-body-sm text-body-sm tracking-wide">Queue</span>
+</button>
+</div>
+</div>
+<!-- Architectural Device Target Pill -->
+<div class="flex justify-center mt-space-md">
+<button class="h-9 px-4 rounded-full bg-surface-container hover:bg-surface-container-high active:scale-98 transition-all flex items-center gap-2 text-on-surface shadow-sm">
+<span class="material-symbols-outlined text-primary text-[18px]">airplay</span>
+<span class="font-label-mono-sm text-label-mono-sm tracking-wide uppercase">AirPlay • Devialet Phantom</span>
+</button>
+</div>
+</div>
+<script>
+  (function() {
+    const playBtn = document.getElementById('play-pause-btn');
+    const playIcon = document.getElementById('play-pause-icon');
+    let isPlaying = true;
+
+    playBtn?.addEventListener('click', () => {
+      isPlaying = !isPlaying;
+      if (isPlaying) {
+        playIcon.textContent = 'pause';
+      } else {
+        playIcon.textContent = 'play_arrow';
+      }
+    });
+
+    const favBtn = document.getElementById('favorite-btn');
+    const favIcon = document.getElementById('favorite-icon');
+    let isFav = false;
+
+    favBtn?.addEventListener('click', () => {
+      isFav = !isFav;
+      if (isFav) {
+        favIcon.style.fontVariationSettings = "'FILL' 1";
+        favBtn.classList.add('text-primary');
+        favBtn.classList.remove('text-on-surface-variant');
+      } else {
+        favIcon.style.fontVariationSettings = "'FILL' 0";
+        favBtn.classList.remove('text-primary');
+        favBtn.classList.add('text-on-surface-variant');
+      }
+    });
+
+    const shuffleBtn = document.getElementById('shuffle-btn');
+    let isShuffle = false;
+    shuffleBtn?.addEventListener('click', () => {
+      isShuffle = !isShuffle;
+      shuffleBtn.classList.toggle('text-primary', isShuffle);
+      shuffleBtn.classList.toggle('text-on-surface-variant', !isShuffle);
+    });
+
+    const repeatBtn = document.getElementById('repeat-btn');
+    let isRepeat = false;
+    repeatBtn?.addEventListener('click', () => {
+      isRepeat = !isRepeat;
+      repeatBtn.classList.toggle('text-primary', isRepeat);
+      repeatBtn.classList.toggle('text-on-surface-variant', !isRepeat);
+    });
+
+    const scrubber = document.getElementById('scrubber-bar');
+    const progress = document.getElementById('scrub-progress');
+    const bead = document.getElementById('scrub-bead');
+    const currentLabel = document.getElementById('time-current');
+
+    const totalSeconds = 232; // 03:52
+
+    function updateTime(pct) {
+      const sec = Math.floor(pct * totalSeconds);
+      const m = Math.floor(sec / 60);
+      const s = sec % 60;
+      currentLabel.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+      progress.style.width = `${pct * 100}%`;
+      bead.style.left = `${pct * 100}%`;
+    }
+
+    scrubber?.addEventListener('click', (e) => {
+      const rect = scrubber.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const pct = Math.max(0, Math.min(1, clickX / rect.width));
+      updateTime(pct);
+    });
+  })();
+</script></main></body></html>

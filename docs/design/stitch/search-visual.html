@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/><meta content="mobile_tab" name="shell-type"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Plus+Jakarta+Sans:wght@500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{width:100vw;margin:0;padding:0;}body{overscroll-behavior:none;}.pb-safe{padding-bottom:env(safe-area-inset-bottom,0px);}.pt-safe{padding-top:env(safe-area-inset-top,0px);}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { "colors": { "surface-container-lowest": "#ffffff", "primary-container": "#1c1b1b", "surface-container": "#eeeeee", "surface-dim": "#dadada", "on-background": "#1a1c1c", "tertiary": "#000000", "surface-container-low": "#f3f3f3", "on-primary-container": "#858383", "inverse-surface": "#2f3131", "on-secondary": "#ffffff", "on-primary-fixed-variant": "#474646", "outline": "#747878", "on-surface": "#1a1c1c", "tertiary-fixed-dim": "#cac6c3", "on-secondary-fixed-variant": "#46464e", "surface-container-highest": "#e2e2e2", "on-tertiary": "#ffffff", "tertiary-container": "#1d1b1a", "outline-variant": "#c4c7c7", "error": "#ba1a1a", "primary-fixed-dim": "#c8c6c5", "background": "#f9f9f9", "surface": "#f9f9f9", "surface-variant": "#e2e2e2", "on-primary-fixed": "#1c1b1b", "inverse-on-surface": "#f0f1f1", "secondary-container": "#e3e1ec", "surface-container-high": "#e8e8e8", "secondary-fixed": "#e3e1ec", "surface-tint": "#5f5e5e", "on-tertiary-fixed": "#1d1b1a", "primary-fixed": "#e5e2e1", "on-secondary-fixed": "#1a1b22", "on-error": "#ffffff", "inverse-primary": "#c8c6c5", "tertiary-fixed": "#e6e1df", "on-tertiary-container": "#868381", "secondary-fixed-dim": "#c6c5cf", "on-tertiary-fixed-variant": "#484645", "surface-bright": "#f9f9f9", "on-error-container": "#93000a", "on-surface-variant": "#444748", "error-container": "#ffdad6", "on-primary": "#ffffff", "primary": "#000000", "on-secondary-container": "#63646c", "secondary": "#5d5e66" }, "borderRadius": { "DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px" }, "spacing": { "space-lg": "1.75rem", "gutter-sm": "1rem", "margin-mobile": "1.25rem", "space-2xl": "5rem", "gutter": "1.5rem", "space-xl": "3rem", "space-xs": "0.25rem", "margin": "3rem", "space-sm": "0.5rem", "space-md": "1rem" }, "fontFamily": { "body-md": ["Inter"], "display-lg-mobile": ["Plus Jakarta Sans"], "mono-metric": ["Inter"], "headline-sm": ["Plus Jakarta Sans"], "headline-lg": ["Plus Jakarta Sans"], "display-lg": ["Plus Jakarta Sans"], "label-caps": ["Inter"], "body-sm": ["Inter"], "headline-md": ["Plus Jakarta Sans"], "body-lg": ["Inter"] }, "fontSize": { "body-md": ["14px", { "lineHeight": "22px", "letterSpacing": "0em", "fontWeight": "400" }], "display-lg-mobile": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "600" }], "mono-metric": ["13px", { "lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "500" }], "headline-sm": ["18px", { "lineHeight": "24px", "letterSpacing": "-0.01em", "fontWeight": "500" }], "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "500" }], "display-lg": ["56px", { "lineHeight": "64px", "letterSpacing": "-0.03em", "fontWeight": "600" }], "label-caps": ["11px", { "lineHeight": "16px", "letterSpacing": "0.08em", "fontWeight": "600" }], "body-sm": ["12px", { "lineHeight": "18px", "letterSpacing": "0.01em", "fontWeight": "400" }], "headline-md": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.015em", "fontWeight": "500" }], "body-lg": ["16px", { "lineHeight": "26px", "letterSpacing": "-0.005em", "fontWeight": "400" }] } } } };</script><style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head><body class="bg-background font-body-md text-on-surface antialiased flex flex-col min-h-screen"><header class="fixed top-0 inset-x-0 z-50 bg-surface/80 backdrop-blur-xl pt-safe shadow-[0_1px_8px_rgba(0,0,0,0.03)]"><div class="h-16 px-margin-mobile flex items-center justify-between"><div class="flex items-center gap-space-sm"><span class="material-symbols-outlined text-primary text-[22px]">graphic_eq</span><span class="font-label-caps text-label-caps tracking-widest text-primary uppercase font-bold">MUSIFY</span></div><div class="flex items-center gap-space-sm"><button aria-label="Equalizer status" class="w-11 h-11 flex items-center justify-center text-on-surface hover:text-primary transition-colors"><span class="material-symbols-outlined text-[20px]">tune</span></button><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center ml-space-xs"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></div></header><main class="flex flex-col relative w-full pt-16 pb-36 bg-surface min-h-screen"><div class="flex flex-col w-full px-margin-mobile pt-space-sm space-y-space-lg">
+<!-- Search Input Module -->
+<section class="flex flex-col space-y-space-sm">
+<div class="relative flex items-center w-full bg-surface-container-lowest rounded-full shadow-sm">
+<span class="material-symbols-outlined text-outline ml-space-md text-[20px] pointer-events-none">search</span>
+<input class="w-full bg-transparent py-3.5 pl-space-sm pr-12 font-body-md text-body-md text-on-surface focus:outline-none placeholder:text-outline" id="search-input" placeholder="Search tracks, artists, acoustics..." type="text" value="Written on the Sky"/>
+<button aria-label="Clear search input" class="absolute right-2 w-8 h-8 rounded-full flex items-center justify-center text-outline hover:text-on-surface hover:bg-surface-container-low transition-colors" id="clear-btn">
+<span class="material-symbols-outlined text-[18px]">close</span>
+</button>
+</div>
+<!-- Filter Facet Pills -->
+<div class="flex items-center gap-space-xs overflow-x-auto no-scrollbar py-space-xs -mx-margin-mobile px-margin-mobile">
+<button class="facet-pill flex-shrink-0 h-7 px-space-md rounded-full bg-primary text-on-primary font-label-caps text-label-caps tracking-wider transition-transform active:scale-95 shadow-sm">ALL</button>
+<button class="facet-pill flex-shrink-0 h-7 px-space-md rounded-full bg-surface-container-lowest text-on-surface-variant font-label-caps text-label-caps tracking-wider transition-colors hover:bg-surface-container-low">SONGS</button>
+<button class="facet-pill flex-shrink-0 h-7 px-space-md rounded-full bg-surface-container-lowest text-on-surface-variant font-label-caps text-label-caps tracking-wider transition-colors hover:bg-surface-container-low">ARTISTS</button>
+<button class="facet-pill flex-shrink-0 h-7 px-space-md rounded-full bg-surface-container-lowest text-on-surface-variant font-label-caps text-label-caps tracking-wider transition-colors hover:bg-surface-container-low">ALBUMS</button>
+<button class="facet-pill flex-shrink-0 h-7 px-space-md rounded-full bg-surface-container-lowest text-on-surface-variant font-label-caps text-label-caps tracking-wider transition-colors hover:bg-surface-container-low">PLAYLISTS</button>
+</div>
+</section>
+<!-- Recent Searches Chips -->
+<section class="flex flex-col space-y-space-xs">
+<div class="flex items-center justify-between">
+<span class="font-label-caps text-label-caps tracking-widest text-outline uppercase font-semibold">Recent Queries</span>
+<button class="font-label-caps text-label-caps text-outline hover:text-on-surface tracking-wider transition-colors">CLEAR</button>
+</div>
+<div class="flex items-center gap-space-xs overflow-x-auto no-scrollbar py-1">
+<button class="flex items-center gap-1.5 h-6 px-2.5 rounded-full bg-surface-container-low text-on-surface-variant font-mono-metric text-[11px] whitespace-nowrap hover:bg-surface-container transition-colors">
+<span class="material-symbols-outlined text-[13px] text-outline">history</span>432Hz focus
+      </button>
+<button class="flex items-center gap-1.5 h-6 px-2.5 rounded-full bg-surface-container-low text-on-surface-variant font-mono-metric text-[11px] whitespace-nowrap hover:bg-surface-container transition-colors">
+<span class="material-symbols-outlined text-[13px] text-outline">history</span>Kiasmos
+      </button>
+<button class="flex items-center gap-1.5 h-6 px-2.5 rounded-full bg-surface-container-low text-on-surface-variant font-mono-metric text-[11px] whitespace-nowrap hover:bg-surface-container transition-colors">
+<span class="material-symbols-outlined text-[13px] text-outline">history</span>Minimal piano
+      </button>
+<button class="flex items-center gap-1.5 h-6 px-2.5 rounded-full bg-surface-container-low text-on-surface-variant font-mono-metric text-[11px] whitespace-nowrap hover:bg-surface-container transition-colors">
+<span class="material-symbols-outlined text-[13px] text-outline">history</span>Sleep Remixes
+      </button>
+</div>
+</section>
+<!-- Top Result Card -->
+<section class="flex flex-col space-y-space-xs">
+<div class="flex items-center justify-between">
+<span class="font-label-caps text-label-caps tracking-widest text-outline uppercase font-semibold">Top Result</span>
+<span class="font-mono-metric text-[11px] text-secondary">MATCH 99.4%</span>
+</div>
+<div class="bg-surface-container-lowest rounded-lg p-space-md shadow-sm flex flex-col gap-space-md border border-surface-container-low">
+<div class="flex items-start gap-space-md">
+<div class="relative w-20 h-20 rounded bg-surface-container flex-shrink-0 overflow-hidden shadow-sm">
+<img class="w-full h-full object-cover" data-alt="Minimalist monochromatic album cover art featuring abstract architectural slate stone slab with soft morning light and refined geometric typography" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAxMki5WhwajWacowUxhXWoXG_GmPKgnVJYQNu-59vEaV-YMHYrNP4DRPUNG_891zau1orJL5Rs3V5my27KSkg-zbGiYUzLXSOoKL4yhTv9s64KtMc_jBRsmvM-S1DdQ9hj35b_c_ceZv__uFKUrQWQbc8oLDs6cuQxtVNVU5PjGVVFyJK4O6TWdtuuKSPa3AcgZOsmppFeCoDWC3cnmJdw9VYYFk9SKioXz3rfgdmUjs7TynFdKAsT"/>
+<div class="absolute inset-0 bg-primary/5"></div>
+</div>
+<div class="flex flex-col min-w-0 flex-1">
+<div class="flex items-center gap-1.5 mb-1">
+<span class="font-label-caps text-[10px] leading-tight px-1.5 py-0.5 rounded bg-surface-container-low text-on-surface font-semibold tracking-wider uppercase">8D SPATIAL</span>
+<span class="font-label-caps text-[10px] leading-tight px-1.5 py-0.5 rounded bg-surface-container-low text-on-surface-variant tracking-wider uppercase">96kHz</span>
+</div>
+<h2 class="font-headline-sm text-headline-sm text-on-surface font-semibold truncate">Written on the Sky</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant truncate mt-0.5">Max Richter — The Blue Notebooks</p>
+<span class="font-mono-metric text-mono-metric text-secondary mt-1">01:40</span>
+</div>
+</div>
+<div class="flex items-center justify-between pt-space-xs bg-surface-container-lowest">
+<div class="flex items-center gap-space-xs">
+<button class="h-9 px-space-md rounded-full bg-primary text-on-primary font-body-sm text-body-sm font-medium flex items-center gap-1.5 hover:opacity-90 active:scale-95 transition-all shadow-sm">
+<span class="material-symbols-outlined text-[18px]">play_arrow</span>
+<span>Play Now</span>
+</button>
+<button aria-label="Add to audio queue" class="w-9 h-9 rounded-full bg-surface-container-low flex items-center justify-center text-on-surface hover:bg-surface-container transition-colors">
+<span class="material-symbols-outlined text-[18px]">playlist_add</span>
+</button>
+</div>
+<div class="flex items-center gap-1">
+<span class="font-mono-metric text-[11px] text-outline uppercase tracking-wider">FLAC · 24-BIT</span>
+<button aria-label="Acoustic specs" class="w-8 h-8 flex items-center justify-center text-outline hover:text-on-surface">
+<span class="material-symbols-outlined text-[18px]">info</span>
+</button>
+</div>
+</div>
+</div>
+</section>
+<!-- Songs List -->
+<section class="flex flex-col space-y-space-xs">
+<div class="flex items-center justify-between">
+<span class="font-label-caps text-label-caps tracking-widest text-outline uppercase font-semibold">Matched Tracks</span>
+<span class="font-mono-metric text-[11px] text-outline">5 of 23</span>
+</div>
+<div class="bg-surface-container-lowest rounded-lg shadow-sm overflow-hidden border border-surface-container-low">
+<!-- Track 01 -->
+<div class="flex items-center justify-between px-space-md py-3 hover:bg-surface-container-low transition-colors group cursor-pointer">
+<div class="flex items-center gap-space-sm min-w-0 pr-2">
+<span class="font-mono-metric text-mono-metric text-primary font-semibold w-5 text-left flex-shrink-0">01</span>
+<div class="w-10 h-10 rounded bg-surface-container overflow-hidden flex-shrink-0 shadow-sm border border-surface-container-high/60">
+<img class="w-full h-full object-cover" data-alt="Cover art of Max Richter The Blue Notebooks textured cardstock" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDbpQl9QfPqhZZlfYjJyrJFp81mp3DKrMlgn9SWOfw2Y8N-4JfA1rMckjTpHPGodkeQe9PfiyJWkMY4dOIefjwtjLRysoQ68U2q5Dm6rPuTeyZ_KnWeAJc28tvZXRelpiSxCgft0cg0zDoeDYdykdoyX3H-9vmXlrTW9I5xWm_xB6vy2PMyM3M7cLc0gwDdWC6MAvwfKloWPYzszpErNXQ_G2WDoE63BMHMQks5KTM9YLCQ27A3QtDh"/>
+</div>
+<div class="flex flex-col min-w-0">
+<span class="font-body-md text-body-md text-primary font-medium truncate">Written on the Sky</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant truncate">Max Richter</span>
+</div>
+</div>
+<div class="flex items-center gap-space-sm flex-shrink-0">
+<span class="font-label-caps text-[10px] px-1.5 py-0.5 rounded bg-surface-container-low text-on-surface-variant font-semibold">8D</span>
+<span class="font-mono-metric text-mono-metric text-outline">01:40</span>
+<button aria-label="Track options" class="w-8 h-8 rounded-full flex items-center justify-center text-outline hover:text-on-surface">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+</div>
+</div>
+<div class="h-[1px] w-full bg-surface-container-low"></div>
+<!-- Track 02 -->
+<div class="flex items-center justify-between px-space-md py-3 hover:bg-surface-container-low transition-colors group cursor-pointer">
+<div class="flex items-center gap-space-sm min-w-0 pr-2">
+<span class="font-mono-metric text-mono-metric text-outline w-5 text-left flex-shrink-0">02</span>
+<div class="w-10 h-10 rounded bg-surface-container overflow-hidden flex-shrink-0 shadow-sm border border-surface-container-high/60">
+<img class="w-full h-full object-cover" data-alt="Cover art featuring serene minimalist stone slab architecture" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAxMki5WhwajWacowUxhXWoXG_GmPKgnVJYQNu-59vEaV-YMHYrNP4DRPUNG_891zau1orJL5Rs3V5my27KSkg-zbGiYUzLXSOoKL4yhTv9s64KtMc_jBRsmvM-S1DdQ9hj35b_c_ceZv__uFKUrQWQbc8oLDs6cuQxtVNVU5PjGVVFyJK4O6TWdtuuKSPa3AcgZOsmppFeCoDWC3cnmJdw9VYYFk9SKioXz3rfgdmUjs7TynFdKAsT"/>
+</div>
+<div class="flex flex-col min-w-0">
+<span class="font-body-md text-body-md text-on-surface font-medium truncate">Horizon Variations</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant truncate">Max Richter</span>
+</div>
+</div>
+<div class="flex items-center gap-space-sm flex-shrink-0">
+<span class="font-label-caps text-[10px] px-1.5 py-0.5 rounded bg-surface-container-low text-on-surface-variant font-semibold">FLAC</span>
+<span class="font-mono-metric text-mono-metric text-outline">01:52</span>
+<button aria-label="Track options" class="w-8 h-8 rounded-full flex items-center justify-center text-outline hover:text-on-surface">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+</div>
+</div>
+<div class="h-[1px] w-full bg-surface-container-low"></div>
+<!-- Track 03 -->
+<div class="flex items-center justify-between px-space-md py-3 hover:bg-surface-container-low transition-colors group cursor-pointer">
+<div class="flex items-center gap-space-sm min-w-0 pr-2">
+<span class="font-mono-metric text-mono-metric text-outline w-5 text-left flex-shrink-0">03</span>
+<div class="w-10 h-10 rounded bg-surface-container overflow-hidden flex-shrink-0 shadow-sm border border-surface-container-high/60">
+<img class="w-full h-full object-cover" data-alt="Cover art of Icelandic misty mountains Living Room Songs by Ólafur Arnalds" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAHVFEogQyRfPK4jaj3XyOIBDC8JLHhZ8KQ_byaY84qvM2DFgdJ7thydb3UTFtGTSj4X-KUcfilL-0mF5fo5dTbyigotC8Fw2Na-YJFPY6rn6lDAzAQAwAHofeZcwXMFQEgIGg8bGV6fGY2ARtMCmWhY9degH_q1DvONKosyjoBeSLA3C-QXXyG6MtT2AnsUNAt8fyaQ7rAnQU_HEMV_7-jks2H8Bwe2WADdKFasEZCLnnPs68gV4a9"/>
+</div>
+<div class="flex flex-col min-w-0">
+<span class="font-body-md text-body-md text-on-surface font-medium truncate">Near Light</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant truncate">Ólafur Arnalds</span>
+</div>
+</div>
+<div class="flex items-center gap-space-sm flex-shrink-0">
+<span class="font-label-caps text-[10px] px-1.5 py-0.5 rounded bg-surface-container-low text-on-surface-variant font-semibold">8D</span>
+<span class="font-mono-metric text-mono-metric text-outline">03:28</span>
+<button aria-label="Track options" class="w-8 h-8 rounded-full flex items-center justify-center text-outline hover:text-on-surface">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+</div>
+</div>
+<div class="h-[1px] w-full bg-surface-container-low"></div>
+<!-- Track 04 -->
+<div class="flex items-center justify-between px-space-md py-3 hover:bg-surface-container-low transition-colors group cursor-pointer">
+<div class="flex items-center gap-space-sm min-w-0 pr-2">
+<span class="font-mono-metric text-mono-metric text-outline w-5 text-left flex-shrink-0">04</span>
+<div class="w-10 h-10 rounded bg-surface-container overflow-hidden flex-shrink-0 shadow-sm border border-surface-container-high/60">
+<img class="w-full h-full object-cover" data-alt="Cover art of brutalist architectural concrete staircase Spaces by Nils Frahm" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB6BufP8BH8MJCxpAFbRWIc-CmBpi9j8K8_N6b-bXxmq4pldPHgSAVZQxVWUpATp1UiApeocdJXaWWImEugrXbAIjh5ZPDQXyrGc6yrzq7-ro2ehqZIhLR3EDLsBTt0lItkCuZX0LsiPx79c4oV8Y0MYf27mLIZ82wYSu7mbWD-yvIGvAur2oyTKYHelLdsZZG6PIraWVefo-XC1Ig6JF2tinBiIvI_L71yLE9n26PQsrjdsMi31tf9"/>
+</div>
+<div class="flex flex-col min-w-0">
+<span class="font-body-md text-body-md text-on-surface font-medium truncate">Says</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant truncate">Nils Frahm</span>
+</div>
+</div>
+<div class="flex items-center gap-space-sm flex-shrink-0">
+<span class="font-label-caps text-[10px] px-1.5 py-0.5 rounded bg-surface-container-low text-on-surface-variant font-semibold">FLAC</span>
+<span class="font-mono-metric text-mono-metric text-outline">08:18</span>
+<button aria-label="Track options" class="w-8 h-8 rounded-full flex items-center justify-center text-outline hover:text-on-surface">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+</div>
+</div>
+<div class="h-[1px] w-full bg-surface-container-low"></div>
+<!-- Track 05 -->
+<div class="flex items-center justify-between px-space-md py-3 hover:bg-surface-container-low transition-colors group cursor-pointer">
+<div class="flex items-center gap-space-sm min-w-0 pr-2">
+<span class="font-mono-metric text-mono-metric text-outline w-5 text-left flex-shrink-0">05</span>
+<div class="w-10 h-10 rounded bg-surface-container overflow-hidden flex-shrink-0 shadow-sm border border-surface-container-high/60">
+<img class="w-full h-full object-cover" data-alt="Monochromatic studio lighting texture of electronic producer Jon Hopkins" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAbsUmExXgk1O26vo56R3VtHXpLJlbml4ceKp_11UwOJDOAI5IUuZpPeZuGCb0zFSRicf3GGhYzLjiDENh3V-h6Sl-wOzg0fLou_kZdIbcTVITVdl85-YhPNkK3em_1eVrhL4_gWxmV9R_uKI7Vn5Ckk1LE4m7JfF0ilTK7CJrhT2aXYYHOsBuTDMRAHSj8h3F55H2FXy9JWJ_yduBhrk2L1fnF_ZZ5jkP0aP4vjKzVF37YtIhsAnIR"/>
+</div>
+<div class="flex flex-col min-w-0">
+<span class="font-body-md text-body-md text-on-surface font-medium truncate">Immunity</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant truncate">Jon Hopkins</span>
+</div>
+</div>
+<div class="flex items-center gap-space-sm flex-shrink-0">
+<span class="font-label-caps text-[10px] px-1.5 py-0.5 rounded bg-surface-container-low text-on-surface-variant font-semibold">8D</span>
+<span class="font-mono-metric text-mono-metric text-outline">09:56</span>
+<button aria-label="Track options" class="w-8 h-8 rounded-full flex items-center justify-center text-outline hover:text-on-surface">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Load More Button -->
+<button class="w-full py-2.5 rounded-lg bg-surface-container-low hover:bg-surface-container text-on-surface-variant hover:text-primary font-label-caps text-label-caps tracking-widest uppercase transition-colors flex items-center justify-center gap-1.5 border border-surface-container-high/40">
+<span>LOAD MORE (18 TRACKS)</span>
+<span class="material-symbols-outlined text-[16px]">expand_more</span>
+</button>
+</section>
+<!-- Playlists Rail (with Rich Image Covers) -->
+<section class="flex flex-col space-y-space-xs">
+<div class="flex items-center justify-between">
+<span class="font-label-caps text-label-caps tracking-widest text-outline uppercase font-semibold">Curated Playlists</span>
+<button class="font-label-caps text-label-caps text-outline hover:text-on-surface tracking-wider transition-colors">EXPLORE</button>
+</div>
+<div class="flex items-start gap-space-md overflow-x-auto no-scrollbar py-space-xs -mx-margin-mobile px-margin-mobile">
+<!-- Playlist 1 -->
+<div class="flex flex-col flex-shrink-0 w-36 cursor-pointer group">
+<div class="w-36 h-36 rounded bg-surface-container overflow-hidden shadow-sm mb-2 relative group-hover:opacity-95 transition-opacity border border-surface-container-high/50">
+<img class="w-full h-full object-cover" data-alt="Brutalist architectural minimalist cover for Spatial Acoustic Focus playlist" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAxMki5WhwajWacowUxhXWoXG_GmPKgnVJYQNu-59vEaV-YMHYrNP4DRPUNG_891zau1orJL5Rs3V5my27KSkg-zbGiYUzLXSOoKL4yhTv9s64KtMc_jBRsmvM-S1DdQ9hj35b_c_ceZv__uFKUrQWQbc8oLDs6cuQxtVNVU5PjGVVFyJK4O6TWdtuuKSPa3AcgZOsmppFeCoDWC3cnmJdw9VYYFk9SKioXz3rfgdmUjs7TynFdKAsT"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
+<div class="absolute bottom-2 left-2 flex items-center gap-1 text-on-primary">
+<span class="material-symbols-outlined text-[15px]">graphic_eq</span>
+<span class="font-mono-metric text-[10px] tracking-wider uppercase">8D Spatial</span>
+</div>
+</div>
+<span class="font-body-sm text-body-sm text-on-surface font-medium truncate">Deep Spatial Focus</span>
+<span class="font-body-sm text-[12px] text-on-surface-variant truncate">48 Tracks · 3h 12m</span>
+</div>
+<!-- Playlist 2 -->
+<div class="flex flex-col flex-shrink-0 w-36 cursor-pointer group">
+<div class="w-36 h-36 rounded bg-surface-container overflow-hidden shadow-sm mb-2 relative group-hover:opacity-95 transition-opacity border border-surface-container-high/50">
+<img class="w-full h-full object-cover" data-alt="Monochrome concrete minimalist stairs cover for Neo-Classical Architecture playlist" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB6BufP8BH8MJCxpAFbRWIc-CmBpi9j8K8_N6b-bXxmq4pldPHgSAVZQxVWUpATp1UiApeocdJXaWWImEugrXbAIjh5ZPDQXyrGc6yrzq7-ro2ehqZIhLR3EDLsBTt0lItkCuZX0LsiPx79c4oV8Y0MYf27mLIZ82wYSu7mbWD-yvIGvAur2oyTKYHelLdsZZG6PIraWVefo-XC1Ig6JF2tinBiIvI_L71yLE9n26PQsrjdsMi31tf9"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
+<div class="absolute bottom-2 left-2 flex items-center gap-1 text-on-primary">
+<span class="material-symbols-outlined text-[15px]">piano</span>
+<span class="font-mono-metric text-[10px] tracking-wider uppercase">Felt Piano</span>
+</div>
+</div>
+<span class="font-body-sm text-body-sm text-on-surface font-medium truncate">Nordic Post-Classical</span>
+<span class="font-body-sm text-[12px] text-on-surface-variant truncate">Max Richter, Nils Frahm</span>
+</div>
+<!-- Playlist 3 -->
+<div class="flex flex-col flex-shrink-0 w-36 cursor-pointer group">
+<div class="w-36 h-36 rounded bg-surface-container overflow-hidden shadow-sm mb-2 relative group-hover:opacity-95 transition-opacity border border-surface-container-high/50">
+<img class="w-full h-full object-cover" data-alt="Atmospheric misty landscape cover for Pure Minimal Ambient playlist" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAHVFEogQyRfPK4jaj3XyOIBDC8JLHhZ8KQ_byaY84qvM2DFgdJ7thydb3UTFtGTSj4X-KUcfilL-0mF5fo5dTbyigotC8Fw2Na-YJFPY6rn6lDAzAQAwAHofeZcwXMFQEgIGg8bGV6fGY2ARtMCmWhY9degH_q1DvONKosyjoBeSLA3C-QXXyG6MtT2AnsUNAt8fyaQ7rAnQU_HEMV_7-jks2H8Bwe2WADdKFasEZCLnnPs68gV4a9"/>
+<div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
+<div class="absolute bottom-2 left-2 flex items-center gap-1 text-on-primary">
+<span class="material-symbols-outlined text-[15px]">waves</span>
+<span class="font-mono-metric text-[10px] tracking-wider uppercase">Ambient</span>
+</div>
+</div>
+<span class="font-body-sm text-body-sm text-on-surface font-medium truncate">Subtle Resonance</span>
+<span class="font-body-sm text-[12px] text-on-surface-variant truncate">Curated by Musify</span>
+</div>
+</div>
+</section>
+<!-- Artists Avatar Rail -->
+<section class="flex flex-col space-y-space-xs">
+<div class="flex items-center justify-between">
+<span class="font-label-caps text-label-caps tracking-widest text-outline uppercase font-semibold">Related Artists</span>
+<button class="font-label-caps text-label-caps text-outline hover:text-on-surface tracking-wider">VIEW ALL</button>
+</div>
+<div class="flex items-start gap-space-md overflow-x-auto no-scrollbar py-space-xs -mx-margin-mobile px-margin-mobile">
+<!-- Artist 1 -->
+<div class="flex flex-col items-center flex-shrink-0 w-24 text-center cursor-pointer group">
+<div class="w-20 h-20 rounded-full bg-surface-container overflow-hidden shadow-sm p-0.5 mb-2 group-hover:scale-105 transition-transform border border-surface-container-high/60">
+<img class="w-full h-full object-cover rounded-full grayscale" data-alt="Monochrome studio portrait of ambient composer Ólafur Arnalds against a neutral gray textured concrete wall, serene expression, dramatic key lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCmZ7QcsivnRCxcSOPbV05ecAqO3pbxdkgBPtdHompYeuHYKg5noZpmWHMna1smSY6Oe2hjS9bW6zTNnWWsjXzv0olh_oHFyuqFgAsK46tL6D6wN9AFJom98PhlZkZTBvPYaGHE73y96GgLDWxirKU4q6sV2SBjQ0F8ai63kdAHu-ooIkkpyyN-OUxKriNkjtLKY51TSSZ46qfKaaMnvq-jcZ4OKENE7ymnzNaWtqynvFTyk0GZdu9T"/>
+</div>
+<span class="font-body-sm text-body-sm text-on-surface font-medium truncate w-full">Ólafur Arnalds</span>
+<span class="font-mono-metric text-[11px] text-outline mt-0.5">1.8M / mo</span>
+</div>
+<!-- Artist 2 -->
+<div class="flex flex-col items-center flex-shrink-0 w-24 text-center cursor-pointer group">
+<div class="w-20 h-20 rounded-full bg-surface-container overflow-hidden shadow-sm p-0.5 mb-2 group-hover:scale-105 transition-transform border border-surface-container-high/60">
+<img class="w-full h-full object-cover rounded-full grayscale" data-alt="Monochrome contrast portrait of German pianist Nils Frahm seated near vintage analog modular synthesizers, refined architectural studio lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBMSHZD0oSAt4uAfXU-RV3awrilnImvwR-JsMUQokO4W5DWky4SQOVM5sJHEbB5j0HNHNgo5h-_coiT8M1g8_roCtkymTG-Ao4k4O06EU0HScGPa84ZGrlPec60uW8uibN-P7qXjKI92Z6PBFg3Td2MmutqRsLO3WvcYWJ6HNeH3wE2PZUSsC_CMrfrNvpDnYlTGMNmqTBelyTpVQqZ2mZ3SaPeE3wY4OCcUHn4kHzlWbn8Cgl4GgRR"/>
+</div>
+<span class="font-body-sm text-body-sm text-on-surface font-medium truncate w-full">Nils Frahm</span>
+<span class="font-mono-metric text-[11px] text-outline mt-0.5">1.2M / mo</span>
+</div>
+<!-- Artist 3 -->
+<div class="flex flex-col items-center flex-shrink-0 w-24 text-center cursor-pointer group">
+<div class="w-20 h-20 rounded-full bg-surface-container overflow-hidden shadow-sm p-0.5 mb-2 group-hover:scale-105 transition-transform border border-surface-container-high/60">
+<img class="w-full h-full object-cover rounded-full grayscale" data-alt="Atmospheric black and white artistic portrait of electronic music producer Jon Hopkins with minimal backlight and soft shadows" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAbsUmExXgk1O26vo56R3VtHXpLJlbml4ceKp_11UwOJDOAI5IUuZpPeZuGCb0zFSRicf3GGhYzLjiDENh3V-h6Sl-wOzg0fLou_kZdIbcTVITVdl85-YhPNkK3em_1eVrhL4_gWxmV9R_uKI7Vn5Ckk1LE4m7JfF0ilTK7CJrhT2aXYYHOsBuTDMRAHSj8h3F55H2FXy9JWJ_yduBhrk2L1fnF_ZZ5jkP0aP4vjKzVF37YtIhsAnIR"/>
+</div>
+<span class="font-body-sm text-body-sm text-on-surface font-medium truncate w-full">Jon Hopkins</span>
+<span class="font-mono-metric text-[11px] text-outline mt-0.5">940K / mo</span>
+</div>
+<!-- Artist 4 -->
+<div class="flex flex-col items-center flex-shrink-0 w-24 text-center cursor-pointer group">
+<div class="w-20 h-20 rounded-full bg-surface-container overflow-hidden shadow-sm p-0.5 mb-2 group-hover:scale-105 transition-transform border border-surface-container-high/60">
+<img class="w-full h-full object-cover rounded-full grayscale" data-alt="Black and white high-resolution portrait of composer Max Richter looking contemplative, clean minimalism, soft daylight" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBGFeUTqBt2MXMaJ2oGHygkgpzmLJ_98xLegbFo1dai2bCIFmsHD2zinDBrf2n6kDZfs1UZf-bfJEw3ac9cXFHPRkiQjXgHRY7kcNDyzEGyZOGjqSxDJLFu5YkQJi4TyLRbQLkcGZfz5uFK5UVkqpGFw58cltDvO2qTuyzn5-MpXb72jmoxVrKBFcwjfvb21xoY5wlchfNRR9CUTjvcngTEJb0pvIKmGFpl0Ad5iB8yox8t0lz9ckZZ"/>
+</div>
+<span class="font-body-sm text-body-sm text-on-surface font-medium truncate w-full">Max Richter</span>
+<span class="font-mono-metric text-[11px] text-outline mt-0.5">3.4M / mo</span>
+</div>
+</div>
+</section>
+<!-- Albums Rail -->
+<section class="flex flex-col space-y-space-xs pb-4">
+<div class="flex items-center justify-between">
+<span class="font-label-caps text-label-caps tracking-widest text-outline uppercase font-semibold">Architectural Editions</span>
+<span class="font-mono-metric text-[11px] text-outline">MASTER TAPES</span>
+</div>
+<div class="flex items-start gap-space-md overflow-x-auto no-scrollbar py-space-xs -mx-margin-mobile px-margin-mobile">
+<!-- Album 1 -->
+<div class="flex flex-col flex-shrink-0 w-36 cursor-pointer group">
+<div class="w-36 h-36 rounded bg-surface-container overflow-hidden shadow-sm mb-2 relative group-hover:opacity-95 transition-opacity border border-surface-container-high/50">
+<img class="w-full h-full object-cover" data-alt="Minimalist design album art with embossed typewriter typography on heavy textured off-white cardstock titled The Blue Notebooks" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDbpQl9QfPqhZZlfYjJyrJFp81mp3DKrMlgn9SWOfw2Y8N-4JfA1rMckjTpHPGodkeQe9PfiyJWkMY4dOIefjwtjLRysoQ68U2q5Dm6rPuTeyZ_KnWeAJc28tvZXRelpiSxCgft0cg0zDoeDYdykdoyX3H-9vmXlrTW9I5xWm_xB6vy2PMyM3M7cLc0gwDdWC6MAvwfKloWPYzszpErNXQ_G2WDoE63BMHMQks5KTM9YLCQ27A3QtDh"/>
+<div class="absolute top-2 right-2 px-1.5 py-0.5 bg-primary/90 text-on-primary rounded font-mono-metric text-[10px]">2004</div>
+</div>
+<span class="font-body-sm text-body-sm text-on-surface font-medium truncate">The Blue Notebooks</span>
+<span class="font-body-sm text-[12px] text-on-surface-variant truncate">Max Richter</span>
+</div>
+<!-- Album 2 -->
+<div class="flex flex-col flex-shrink-0 w-36 cursor-pointer group">
+<div class="w-36 h-36 rounded bg-surface-container overflow-hidden shadow-sm mb-2 relative group-hover:opacity-95 transition-opacity border border-surface-container-high/50">
+<img class="w-full h-full object-cover" data-alt="Architectural black and white geometric abstraction album cover with brutalist concrete staircase casting clean shadows" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB6BufP8BH8MJCxpAFbRWIc-CmBpi9j8K8_N6b-bXxmq4pldPHgSAVZQxVWUpATp1UiApeocdJXaWWImEugrXbAIjh5ZPDQXyrGc6yrzq7-ro2ehqZIhLR3EDLsBTt0lItkCuZX0LsiPx79c4oV8Y0MYf27mLIZ82wYSu7mbWD-yvIGvAur2oyTKYHelLdsZZG6PIraWVefo-XC1Ig6JF2tinBiIvI_L71yLE9n26PQsrjdsMi31tf9"/>
+<div class="absolute top-2 right-2 px-1.5 py-0.5 bg-primary/90 text-on-primary rounded font-mono-metric text-[10px]">2013</div>
+</div>
+<span class="font-body-sm text-body-sm text-on-surface font-medium truncate">Spaces</span>
+<span class="font-body-sm text-[12px] text-on-surface-variant truncate">Nils Frahm</span>
+</div>
+<!-- Album 3 -->
+<div class="flex flex-col flex-shrink-0 w-36 cursor-pointer group">
+<div class="w-36 h-36 rounded bg-surface-container overflow-hidden shadow-sm mb-2 relative group-hover:opacity-95 transition-opacity border border-surface-container-high/50">
+<img class="w-full h-full object-cover" data-alt="Monochrome minimalist vinyl artwork depicting a quiet Icelandic landscape shrouded in fog with elegant thin typographic title" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAHVFEogQyRfPK4jaj3XyOIBDC8JLHhZ8KQ_byaY84qvM2DFgdJ7thydb3UTFtGTSj4X-KUcfilL-0mF5fo5dTbyigotC8Fw2Na-YJFPY6rn6lDAzAQAwAHofeZcwXMFQEgIGg8bGV6fGY2ARtMCmWhY9degH_q1DvONKosyjoBeSLA3C-QXXyG6MtT2AnsUNAt8fyaQ7rAnQU_HEMV_7-jks2H8Bwe2WADdKFasEZCLnnPs68gV4a9"/>
+<div class="absolute top-2 right-2 px-1.5 py-0.5 bg-primary/90 text-on-primary rounded font-mono-metric text-[10px]">2011</div>
+</div>
+<span class="font-body-sm text-body-sm text-on-surface font-medium truncate">Living Room Songs</span>
+<span class="font-body-sm text-[12px] text-on-surface-variant truncate">Ólafur Arnalds</span>
+</div>
+</div>
+</section>
+</div>
+<script>
+  (function() {
+    const searchInput = document.getElementById('search-input');
+    const clearBtn = document.getElementById('clear-btn');
+    const pills = document.querySelectorAll('.facet-pill');
+
+    if (clearBtn && searchInput) {
+      clearBtn.addEventListener('click', () => {
+        searchInput.value = '';
+        searchInput.focus();
+      });
+    }
+
+    pills.forEach(pill => {
+      pill.addEventListener('click', () => {
+        pills.forEach(p => {
+          p.classList.remove('bg-primary', 'text-on-primary', 'shadow-sm');
+          p.classList.add('bg-surface-container-lowest', 'text-on-surface-variant');
+        });
+        pill.classList.remove('bg-surface-container-lowest', 'text-on-surface-variant');
+        pill.classList.add('bg-primary', 'text-on-primary', 'shadow-sm');
+      });
+    });
+  })();
+</script></main><div class="fixed bottom-0 inset-x-0 z-50 pb-safe bg-surface/90 backdrop-blur-xl shadow-[0_-4px_16px_rgba(0,0,0,0.03)]"><div class="mx-margin-mobile mb-space-xs bg-surface-container-lowest rounded px-space-md py-space-sm flex items-center justify-between border border-surface-container-low"><div class="flex items-center gap-space-sm overflow-hidden min-w-0 pr-space-sm"><div class="w-9 h-9 rounded bg-surface-container flex-shrink-0 overflow-hidden shadow-sm border border-surface-container-high/60"><img class="w-full h-full object-cover" data-alt="Mini player cover thumbnail Max Richter" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAxMki5WhwajWacowUxhXWoXG_GmPKgnVJYQNu-59vEaV-YMHYrNP4DRPUNG_891zau1orJL5Rs3V5my27KSkg-zbGiYUzLXSOoKL4yhTv9s64KtMc_jBRsmvM-S1DdQ9hj35b_c_ceZv__uFKUrQWQbc8oLDs6cuQxtVNVU5PjGVVFyJK4O6TWdtuuKSPa3AcgZOsmppFeCoDWC3cnmJdw9VYYFk9SKioXz3rfgdmUjs7TynFdKAsT"/></div><div class="flex flex-col min-w-0"><span class="font-mono-metric text-mono-metric text-primary truncate">Written on the Sky</span><span class="font-body-sm text-body-sm text-on-surface-variant truncate">Max Richter</span></div></div><div class="flex items-center gap-space-xs flex-shrink-0"><span class="font-label-caps text-label-caps px-space-xs py-0.5 rounded bg-surface-container-low text-on-surface-variant uppercase mr-space-xs">FLAC</span><button aria-label="Play or pause" class="w-11 h-11 flex items-center justify-center text-primary"><span class="material-symbols-outlined text-[22px]">play_arrow</span></button><button aria-label="Next track" class="w-11 h-11 flex items-center justify-center text-on-surface-variant hover:text-primary transition-colors"><span class="material-symbols-outlined text-[22px]">skip_next</span></button></div></div><nav class="flex justify-around items-center h-16 px-space-sm" data-active-classes="text-primary font-semibold"><a class="flex flex-col items-center justify-center gap-space-xs min-w-[56px] h-11 text-on-surface-variant hover:text-primary transition-colors" data-path="home" href="#"><span class="material-symbols-outlined text-[20px]">grid_view</span><span class="font-label-caps text-label-caps tracking-wider">HOME</span></a><a aria-current="page" class="flex flex-col items-center justify-center gap-space-xs min-w-[56px] h-11 transition-colors text-primary font-semibold" data-path="search" href="#"><span class="material-symbols-outlined text-[20px]">search</span><span class="font-label-caps text-label-caps tracking-wider">SEARCH</span></a><a class="flex flex-col items-center justify-center gap-space-xs min-w-[56px] h-11 text-on-surface-variant hover:text-primary transition-colors" data-path="library" href="#"><span class="material-symbols-outlined text-[20px]">folder_open</span><span class="font-label-caps text-label-caps tracking-wider">LIBRARY</span></a><a class="flex flex-col items-center justify-center gap-space-xs min-w-[56px] h-11 text-on-surface-variant hover:text-primary transition-colors" data-path="settings" href="#"><span class="material-symbols-outlined text-[20px]">settings</span><span class="font-label-caps text-label-caps tracking-wider">SETTINGS</span></a></nav></div></body></html>

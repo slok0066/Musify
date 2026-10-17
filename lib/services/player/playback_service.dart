@@ -1,0 +1,1625 @@
+import 'dart:async';
+import 'dart:math' as math;
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter_soloud/flutter_soloud.dart';
+
+import '../../data/models/track.dart';
+import '../media_cache.dart';
+import '../mp4_aac.dart';
+import '../settings_service.dart';
+
+/// What the engine needs in order to start a track.
+class PlayableSource {
+  const PlayableSource({
+    required this.path,
+    required this.isLocalFile,
+    required this.bitrate,
+  });
+
+  /// A filesystem path, or an http(s) URL when nothing could be staged.
+  final String path;
+  final bool isLocalFile;
+  final int bitrate;
+}
+
+/// Resolves a track to something playable and reports transfer progress.
+typedef SourceResolver = Future<PlayableSource?> Function(
+  Track track, {
+  ValueChanged<double?>? onProgress,
+  bool prefetch,
+});
+
+/// Resolves a track to a source that can be read *while it downloads*.
+typedef StreamOpener = Future<StreamSource?> Function(Track track);
+
+/// The completed local file for a track, or `null` when it is not whole yet.
+typedef CompletedPathLookup = String? Function(Track track);
+
+/// The Musify audio engine.
+///
+/// This is the single source of truth for playback state. It owns the SoLoud
+/// instance, the queue, the 8D spatial DSP chain, the parametric equalizer, the
+/// sleep timer and the crossfader. It has **no** platform dependencies, so the
+/// exact same engine runs on Android (wrapped by `audio_service` for the lock
+/// screen) and on desktop (driven directly), which is what makes it testable.
+///
+/// ## The three-stage 8D pipeline (PRD §4.1)
+/// 1. **Orbit** — a 60 fps LFO moves the voice around the listener:
+///    `x = 2·sin(θ)`, `z = 2·cos(θ)`, reinforced with a constant-power pan of
+///    `0.85·sin(θ)`.
+/// 2. **Rear shadowing** — the biquad low-pass cutoff tracks the voice's `z`:
+///    16 kHz in front of the head down to 3.2 kHz behind it.
+/// 3. **Hall** — a freeverb with `roomSize = 0.72`, `damping = 0.50`, wet mixed
+///    in over 350 ms.
+///
+/// ## Safety
+/// Every FFI touch goes through [_live], which asserts that the engine is
+/// initialised *and* that the voice handle is still valid. Nothing in this file
+/// can throw into the widget tree; failures surface as [errorText] and the
+/// engine resets to a known state.
+class PlaybackService {
+  PlaybackService({
+    required SourceResolver resolveSource,
+    required SettingsService settings,
+    StreamOpener? openStream,
+    CompletedPathLookup? completedPath,
+  })  : _resolveSource = resolveSource,
+        _openStream = openStream,
+        _completedPath = completedPath,
+        _settings = settings {
+    _settings.addListener(_onSettingsChanged);
+  }
+
+  final SourceResolver _resolveSource;
+
+  /// Resolves a track to a read-while-writing source (the instant-play path).
+  /// `null` in tests and on platforms without a repository.
+  final StreamOpener? _openStream;
+
+  /// Where a *complete* local copy of a track lives, if it exists. The
+  /// crossfader needs a file it can hand to the engine immediately.
+  final CompletedPathLookup? _completedPath;
+
+  final SettingsService _settings;
+
+  /// Read-only settings access for the platform adapter.
+  SettingsService get settings => _settings;
+
+  final SoLoud _soloud = SoLoud.instance;
+
+  // ------------------------------------------------------------------ state
+
+  final ValueNotifier<Track?> currentTrack = ValueNotifier<Track?>(null);
+  final ValueNotifier<bool> isPlaying = ValueNotifier<bool>(false);
+  final ValueNotifier<bool> isBuffering = ValueNotifier<bool>(false);
+  final ValueNotifier<Duration> position = ValueNotifier<Duration>(Duration.zero);
+  final ValueNotifier<Duration> duration = ValueNotifier<Duration>(Duration.zero);
+  final ValueNotifier<Duration> buffered = ValueNotifier<Duration>(Duration.zero);
+  final ValueNotifier<String?> errorText = ValueNotifier<String?>(null);
+  final ValueNotifier<double?> bufferFraction = ValueNotifier<double?>(null);
+
+  final ValueNotifier<bool> is8DEnabled = ValueNotifier<bool>(false);
+  final ValueNotifier<bool> shuffleEnabled = ValueNotifier<bool>(false);
+  final ValueNotifier<RepeatMode> repeatMode = ValueNotifier<RepeatMode>(RepeatMode.off);
+  final ValueNotifier<Duration?> sleepRemaining = ValueNotifier<Duration?>(null);
+  final ValueNotifier<bool> headphonesConnected = ValueNotifier<bool>(false);
+
+  final ValueNotifier<List<Track>> queue = ValueNotifier<List<Track>>(const []);
+  final ValueNotifier<int> queueIndex = ValueNotifier<int>(0);
+
+  /// Increments whenever the user-visible playback state changes, so the
+  /// lock-screen adapter can mirror it without polling.
+  final ValueNotifier<int> stateRevision = ValueNotifier<int>(0);
+
+  final StreamController<Float32List> _fftController =
+      StreamController<Float32List>.broadcast();
+
+  Stream<Float32List> get fftStream => _fftController.stream;
+
+  // ----------------------------------------------------------------- engine
+
+  AudioSource? _source;
+  SoundHandle? _handle;
+  AudioSource? _incomingSource;
+  SoundHandle? _incomingHandle;
+  Timer? _positionTimer;
+  Timer? _crossfadeTimer;
+  Timer? _sleepTimer;
+  Timer? _orbitTimer;
+  final Stopwatch _orbitClock = Stopwatch();
+  StreamSubscription<void>? _finishSub;
+  StreamSubscription<AudioVisualizationData>? _vizSub;
+
+  int _queueIndex = 0;
+  List<int> _shuffleOrder = const [];
+  int _shufflePosition = 0;
+
+  bool _engineReady = false;
+  bool _switching = false;
+  bool _crossfading = false;
+  bool _visualizerOn = false;
+  bool _disposed = false;
+
+  /// Track id -> already-staged local path, used for gapless transitions.
+  final Map<String, String> _staged = {};
+
+  // ------------------------------------------------------- instant playback
+  //
+  // The progressive path: instead of downloading an MP4 and letting the engine
+  // decode all of it before the first sample, Musify reads the MP4's sample
+  // table and hands the engine ADTS-wrapped AAC frames as it asks for them.
+  // See `mp4_aac.dart` for the container work and `MediaCache.openStream` for
+  // the read-while-writing transfer.
+
+  /// The live byte source behind the current voice, when streaming.
+  StreamSession? _streamSession;
+
+  /// The parsed sample table of the current stream.
+  Mp4AacIndex? _streamIndex;
+
+  /// True while [_source] is a pull-buffer stream rather than a loaded file.
+  bool _streaming = false;
+
+  /// The engine has produced sound from the stream (so a feed failure should be
+  /// reported rather than answered with a restart).
+  bool _streamStarted = false;
+
+  /// Feeds that are already in flight, keyed by ADTS offset. Two requests for
+  /// the same offset must not buy the same bytes twice.
+  final Set<int> _feedsInFlight = {};
+
+  /// Tracks whose stream did not work, so they are never retried in a loop.
+  final Set<String> _streamFailed = {};
+
+  int _streamStumbles = 0;
+  Timer? _streamWatchdog;
+
+  /// The current track has already been reported as finished, so a second
+  /// signal (finish callback, end-of-buffer detection) cannot advance the queue
+  /// twice.
+  bool _endNotified = false;
+
+  /// How much ADTS stream one feed carries. ~190 KB is about four and a half
+  /// seconds of 320 kbps AAC: long enough that the engine is never starved,
+  /// short enough that a seek is not waiting on a quarter-megabyte read.
+  static const int _feedWindowBytes = 192 * 1024;
+
+  bool get engineReady => _engineReady;
+
+  /// True while a voice handle can safely be dereferenced.
+  bool _live(SoundHandle? handle) =>
+      handle != null && _soloud.isInitialized && _soloud.getIsValidVoiceHandle(handle);
+
+  // ------------------------------------------------------------------- setup
+
+  /// Boots the C++ engine. Time-boxed by the caller so a stuck audio device can
+  /// never block the first frame.
+  Future<void> initEngine() async {
+    if (_engineReady || _disposed) return;
+    try {
+      if (!_soloud.isInitialized) {
+        await _soloud.init(
+          sampleRate: 44100,
+          bufferSize: 2048,
+          channels: Channels.stereo,
+        );
+      }
+
+      // Listener sits at the origin, facing +Z, with +Y up.
+      _soloud.set3dListenerParameters(
+        0, 0, 0,
+        0, 0, 1,
+        0, 1, 0,
+        0, 0, 0,
+      );
+      _soloud.set3dSoundSpeed(343);
+      _soloud.setFftSmoothing(0.75);
+      _soloud.setFftDecibelRange(-90, 0);
+
+      _engineReady = true;
+      _applyEqualizer();
+      _applyBassBoost();
+      _apply8DParameters();
+    } catch (e) {
+      debugPrint('SoLoud init failed: $e');
+      _engineReady = false;
+      errorText.value = 'AUDIO ENGINE UNAVAILABLE';
+    }
+  }
+
+  // ------------------------------------------------------------------- queue
+
+  /// Starts [tracks] as the queue, at [startIndex].
+  Future<void> playCollection(
+    List<Track> tracks, {
+    int startIndex = 0,
+    bool? shuffle,
+  }) async {
+    final playable = tracks.where((t) => t.id.isNotEmpty).toList();
+    if (playable.isEmpty) return;
+
+    if (shuffle != null) shuffleEnabled.value = shuffle;
+
+    queue.value = playable;
+    final isShuffle = shuffle ?? shuffleEnabled.value;
+    final initialIndex = (isShuffle && startIndex == 0 && playable.length > 1)
+        ? math.Random().nextInt(playable.length)
+        : startIndex.clamp(0, playable.length - 1);
+    _queueIndex = initialIndex;
+    queueIndex.value = _queueIndex;
+    _rebuildShuffleOrder(seedWith: _queueIndex);
+    _staged.clear();
+
+    await _startCurrent(prefetchAhead: true);
+  }
+
+  Future<void> playTrack(Track track, {List<Track>? context}) async {
+    final rest = context?.where((t) => t.id != track.id).toList() ?? const <Track>[];
+    queue.value = [track, ...rest];
+    _queueIndex = 0;
+    queueIndex.value = 0;
+    _rebuildShuffleOrder(seedWith: 0);
+    _staged.clear();
+    await _startCurrent(prefetchAhead: true);
+  }
+
+  /// Inserts directly after the current track.
+  Future<void> playNext(Track track) async {
+    final list = [...queue.value];
+    if (list.isEmpty) {
+      await playTrack(track);
+      return;
+    }
+    list.insert(_queueIndex + 1, track);
+    queue.value = list;
+    _rebuildShuffleOrder(seedWith: _queueIndex);
+  }
+
+  /// Appends to the end of the queue.
+  Future<void> addToQueue(Track track) async {
+    final list = [...queue.value];
+    if (list.isEmpty) {
+      await playTrack(track);
+      return;
+    }
+    list.add(track);
+    queue.value = list;
+    _rebuildShuffleOrder(seedWith: _queueIndex);
+  }
+
+  Future<void> addAllToQueue(List<Track> tracks) async {
+    if (tracks.isEmpty) return;
+    if (queue.value.isEmpty) {
+      await playCollection(tracks);
+      return;
+    }
+    queue.value = [...queue.value, ...tracks];
+    _rebuildShuffleOrder(seedWith: _queueIndex);
+  }
+
+  Future<void> removeFromQueue(int index) async {
+    final list = [...queue.value];
+    if (index < 0 || index >= list.length) return;
+    final removingCurrent = index == _queueIndex;
+    list.removeAt(index);
+    queue.value = list;
+
+    if (list.isEmpty) {
+      await _teardownVoice();
+      currentTrack.value = null;
+      duration.value = Duration.zero;
+      position.value = Duration.zero;
+      isPlaying.value = false;
+      _bump();
+      return;
+    }
+
+    if (index < _queueIndex) _queueIndex--;
+    if (removingCurrent) {
+      _queueIndex = _queueIndex.clamp(0, list.length - 1);
+      queueIndex.value = _queueIndex;
+      await _startCurrent();
+      return;
+    }
+    _queueIndex = _queueIndex.clamp(0, list.length - 1);
+    queueIndex.value = _queueIndex;
+    _rebuildShuffleOrder(seedWith: _queueIndex);
+  }
+
+  Future<void> reorderQueue(int oldIndex, int newIndex) async {
+    final list = [...queue.value];
+    if (oldIndex < 0 || oldIndex >= list.length) return;
+    var target = newIndex;
+    if (target < 0) target = 0;
+    if (target >= list.length) target = list.length - 1;
+
+    final playing = list[_queueIndex];
+    final moved = list.removeAt(oldIndex);
+    list.insert(target, moved);
+    queue.value = list;
+    _queueIndex = list.indexWhere((t) => t.id == playing.id);
+    if (_queueIndex < 0) _queueIndex = 0;
+    queueIndex.value = _queueIndex;
+    _rebuildShuffleOrder(seedWith: _queueIndex);
+  }
+
+  Future<void> clearQueue() async {
+    final current = currentTrack.value;
+    if (current == null) {
+      queue.value = const [];
+      return;
+    }
+    queue.value = [current];
+    _queueIndex = 0;
+    queueIndex.value = 0;
+    _rebuildShuffleOrder(seedWith: 0);
+  }
+
+  /// Jumps to a specific queue position.
+  Future<void> jumpTo(int index) async {
+    final list = queue.value;
+    if (index < 0 || index >= list.length) return;
+    _queueIndex = index;
+    queueIndex.value = index;
+    final pos = _shuffleOrder.indexOf(index);
+    if (pos >= 0) _shufflePosition = pos;
+    await _startCurrent(prefetchAhead: true);
+  }
+
+  void _rebuildShuffleOrder({required int seedWith}) {
+    if (queue.value.isEmpty) {
+      _shuffleOrder = const [];
+      _shufflePosition = 0;
+      return;
+    }
+    final indices = List<int>.generate(queue.value.length, (i) => i);
+    if (shuffleEnabled.value) {
+      indices.shuffle(math.Random());
+      // Keep the currently playing track at the head so toggling shuffle never
+      // yanks the listener to a different song.
+      indices.remove(seedWith);
+      indices.insert(0, seedWith);
+      _shufflePosition = 0;
+    }
+    _shuffleOrder = indices;
+  }
+
+  // --------------------------------------------------------------- transport
+
+  Future<void> togglePlayPause() async =>
+      isPlaying.value ? await pause() : await resume();
+
+  Future<void> pause() async {
+    if (_crossfading) _abortCrossfade();
+    final handle = _handle;
+    if (_live(handle)) {
+      _soloud.setPause(handle!, true);
+      _orbitClock.stop();
+      isPlaying.value = false;
+      _bump();
+    }
+  }
+
+  Future<void> resume() async {
+    if (!_engineReady) await initEngine();
+    if (_live(_handle)) {
+      _soloud.setPause(_handle!, false);
+      isPlaying.value = true;
+      if (is8DEnabled.value) {
+        if (!_orbitClock.isRunning) _orbitClock.start();
+        _startOrbitIfNeeded();
+      }
+      _bump();
+      return;
+    }
+    // Nothing loaded (fresh launch) — start whatever the queue holds.
+    if (queue.value.isNotEmpty) await _startCurrent();
+  }
+
+  Future<void> seek(Duration target) async {
+    if (_crossfading) _abortCrossfade();
+    final handle = _handle;
+    if (!_live(handle)) return;
+    final total = duration.value;
+    var clamped = target;
+    if (total > Duration.zero && clamped > total) clamped = total;
+    if (clamped < Duration.zero) clamped = Duration.zero;
+    try {
+      _soloud.seek(handle!, clamped);
+      position.value = clamped;
+      if (is8DEnabled.value) {
+        _orbitClock
+          ..stop()
+          ..reset()
+          ..start();
+      }
+    } catch (e) {
+      debugPrint('seek failed: $e');
+    }
+  }
+
+  Future<void> skipToNext() async {
+    if (queue.value.isEmpty) return;
+    final next = _peekNextIndex();
+    if (next == null) {
+      await pause();
+      await seek(Duration.zero);
+      return;
+    }
+    _queueIndex = next;
+    queueIndex.value = next;
+    await _startCurrent(prefetchAhead: true);
+  }
+
+  Future<void> skipToPrevious() async {
+    if (queue.value.isEmpty) return;
+
+    // Standard player behaviour: restarts the song unless you are near the top.
+    if (position.value.inSeconds > 3) {
+      await seek(Duration.zero);
+      return;
+    }
+
+    final previous = _peekPreviousIndex();
+    if (previous == null) {
+      await seek(Duration.zero);
+      return;
+    }
+    _queueIndex = previous;
+    queueIndex.value = previous;
+    await _startCurrent();
+  }
+
+  int? _peekNextIndex() {
+    if (queue.value.isEmpty) return null;
+
+    if (shuffleEnabled.value && queue.value.length > 1) {
+      if (_shuffleOrder.length != queue.value.length) {
+        _rebuildShuffleOrder(seedWith: _queueIndex);
+      }
+      if (_shufflePosition + 1 < _shuffleOrder.length) {
+        return _shuffleOrder[_shufflePosition + 1];
+      }
+      // Reached the end of the shuffled run: pick another random track from the
+      // playlist so after the song is over it randomly selects another track continuously!
+      final candidates = List<int>.generate(queue.value.length, (i) => i)..remove(_queueIndex);
+      if (candidates.isNotEmpty) {
+        return candidates[math.Random().nextInt(candidates.length)];
+      }
+      return _shuffleOrder.isNotEmpty ? _shuffleOrder.first : 0;
+    }
+
+    if (_queueIndex + 1 < queue.value.length) return _queueIndex + 1;
+    if (repeatMode.value == RepeatMode.all) return 0;
+    return null;
+  }
+
+  int? _peekPreviousIndex() {
+    if (queue.value.isEmpty) return null;
+
+    if (shuffleEnabled.value && queue.value.length > 1) {
+      if (_shuffleOrder.length != queue.value.length) {
+        _rebuildShuffleOrder(seedWith: _queueIndex);
+      }
+      if (_shufflePosition - 1 >= 0) return _shuffleOrder[_shufflePosition - 1];
+      return _shuffleOrder.isNotEmpty ? _shuffleOrder.last : 0;
+    }
+
+    if (_queueIndex - 1 >= 0) return _queueIndex - 1;
+    if (repeatMode.value == RepeatMode.all) return queue.value.length - 1;
+    return null;
+  }
+
+  void _advanceShuffleCursor() {
+    if (!shuffleEnabled.value) return;
+    final pos = _shuffleOrder.indexOf(_queueIndex);
+    if (pos >= 0) _shufflePosition = pos;
+  }
+
+  // ------------------------------------------------------------------ cycle
+
+  // ------------------------------------------------------------ instant play
+
+  /// Starts [track] from a live byte source: the container is indexed (MP4) or
+  /// passed through raw (MP3/FLAC/Ogg/WAV), the engine gets a pull-buffer
+  /// stream, and bytes are fed as it asks for them. Returns `false` when the
+  /// classic route must be used instead.
+  ///
+  /// Every failure path here is a *fall back*, never an error: a container the
+  /// demuxer does not understand, a server without a length header, a codec
+  /// that is not AAC-LC. The listener hears the song either way — it just takes
+  /// the download route.
+  Future<bool> _startProgressive(Track track) async {
+    final open = _openStream;
+    if (open == null) return false;
+    if (!_settings.value.instantStart) return false;
+    if (_streamFailed.contains(track.id)) return false;
+
+    StreamSource? resolved;
+    try {
+      resolved = await open(track);
+    } catch (e) {
+      debugPrint('stream open failed for ${track.id}: $e');
+      return false;
+    }
+    if (resolved == null) return false;
+    if (_disposed) {
+      resolved.session.release();
+      return false;
+    }
+
+    final session = resolved.session;
+    final total = session.total;
+    if (total == null || total <= 0) {
+      session.release();
+      return false;
+    }
+
+    // Two shapes of stream are supported. An **MP4** is indexed here and its
+    // AAC frames are repacked into ADTS by Musify, because the engine cannot
+    // read an MP4 container incrementally. A **raw elementary stream** (the
+    // catalogue's older `_96.mp3` rungs, or any file already in the vault that
+    // the engine decodes natively) needs no repacking at all: its bytes go to
+    // the engine exactly as they arrive.
+    final headEnd = math.min(96 * 1024, total);
+    final head = await session.read(0, headEnd);
+    var index = head == null ? null : Mp4AacIndex.parse(head, fileLength: total);
+    if (index == null && head != null && total > headEnd) {
+      // `moov` written last: the sample table is in the tail instead.
+      final tail = await session.read(math.max(0, total - 256 * 1024), total);
+      if (tail != null) {
+        index = Mp4AacIndex.parseAnywhere(tail, fileLength: total);
+      }
+    }
+    final raw = index == null && head != null && _isRawDecodable(head);
+    if (index == null && !raw) {
+      debugPrint('progressive: ${track.id} has no usable sample table');
+      session.release();
+      return false;
+    }
+
+    // From here on the progressive path owns the voice.
+    _streamSession = session;
+    _streamIndex = index;
+    _streamStumbles = 0;
+    _streamStarted = false;
+    _feedsInFlight.clear();
+    _endNotified = false;
+    if (index != null) duration.value = index.duration;
+    buffered.value = Duration.zero;
+    bufferFraction.value = null;
+
+    final source = _soloud.setPullBufferStream(
+      audioSizeBytes: index?.totalAdtsBytes ?? total,
+      format: BufferType.auto,
+      bufferSizeBytes: 4 * 1024 * 1024,
+      bufferTriggerPosition: 0.75,
+      sampleRate: index?.sampleRate ?? 44100,
+      channels: (index?.channels ?? 2) == 1
+          ? Channels.mono
+          : Channels.stereo,
+      onMoreDataIsNeeded: (offset) => unawaited(_feedStream(offset)),
+      onBuffering: (buffering, handle, time) {
+        if (_disposed || !_streaming) return;
+        isBuffering.value = buffering;
+        if (!buffering) _streamStarted = true;
+        _bump();
+      },
+      onAudioDuration: (seconds) {
+        if (_disposed || !_streaming || seconds <= 0) return;
+        // The sample table is authoritative, but if the engine disagrees by
+        // more than a second its own measurement wins: it is what seeks.
+        final measured = Duration(microseconds: (seconds * 1000000).round());
+        if ((measured - duration.value).inMilliseconds.abs() > 1200) {
+          duration.value = measured;
+        }
+      },
+    );
+
+    _source = source;
+    _streaming = true;
+
+    final handle = _soloud.play3d(source, 0, 0, 1, volume: 1);
+    _handle = handle;
+    if (!_live(handle)) {
+      _streaming = false;
+      _streamSession = null;
+      _streamIndex = null;
+      _source = null;
+      session.release();
+      await _soloud.disposeSource(source);
+      return false;
+    }
+
+    _soloud.set3dSourceMinMaxDistance(handle, 1, 8);
+    _soloud.set3dSourceAttenuation(handle, 1, 1);
+    if (is8DEnabled.value) _apply8DToActiveVoice();
+
+    _finishSub = source.allInstancesFinished.listen((_) => _notifyEnd());
+
+    isPlaying.value = true;
+    isBuffering.value = true;
+    _startPositionTimer();
+    _startOrbitIfNeeded();
+    _advanceShuffleCursor();
+    _bump();
+
+    // The first frames should be audible within a second or two. Still silent
+    // after this long means the source is not going to work: take the download
+    // route rather than leave a spinning player.
+    _streamWatchdog?.cancel();
+    _streamWatchdog = Timer(const Duration(seconds: 7), () {
+      if (_disposed || !_streaming || _streamStarted) return;
+      if (currentTrack.value?.id != track.id) return;
+      unawaited(_fallBackFromStream(track));
+    });
+
+    debugPrint(
+      'progressive: ${track.id} '
+      '${index == null ? 'raw' : '${index.sampleRate}Hz'} '
+      '${(index?.duration ?? track.duration).inSeconds}s '
+      '${index?.totalAdtsBytes ?? total}B '
+      'from ${resolved.url.isEmpty ? 'disk' : 'network'}',
+    );
+    return true;
+  }
+
+  /// Routes an engine byte request: an MP4 is repacked into ADTS on the way,
+  /// a raw elementary stream is handed over exactly as it arrived.
+  Future<void> _feedStream(int offset) =>
+      _streamIndex == null ? _feedRaw(offset) : _feedFrames(offset);
+
+  /// True when the engine's own decoder can read these bytes frame-for-frame —
+  /// MP3, FLAC, Ogg or WAV. An MP4 is excluded: the demuxer already refused it,
+  /// and the engine cannot index an MP4 either, so the classic route is the
+  /// honest answer for it.
+  bool _isRawDecodable(Uint8List head) {
+    if (!MediaCache.looksLikeAudio(head: head)) return false;
+    if (head.length >= 8) {
+      // 'f' 't' 'y' 'p' at bytes 4..7: an MP4 whose table could not be read.
+      if (head[4] == 0x66 &&
+          head[5] == 0x74 &&
+          head[6] == 0x79 &&
+          head[7] == 0x70) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /// Feeds the engine raw bytes that begin at file offset [offset].
+  Future<void> _feedRaw(int offset) async {
+    final session = _streamSession;
+    final source = _source;
+    if (!_streaming || _disposed) return;
+    if (session == null || source == null) return;
+    final total = session.total;
+    if (total == null || offset < 0) return;
+    if (offset >= total) {
+      // The engine has read everything there is — say so, so the queue can
+      // advance instead of waiting for bytes that do not exist.
+      _reportStreamProgress(session);
+      return;
+    }
+    if (!_feedsInFlight.add(offset)) return;
+
+    try {
+      final end = math.min(offset + _feedWindowBytes, total);
+      final bytes = await session.read(offset, end);
+      if (_disposed || !_streaming) return;
+      if (bytes == null || bytes.isEmpty) {
+        _onFeedFailed(offset, 'no bytes');
+        return;
+      }
+      _soloud.addPullBufferDataStream(source, bytes, offset: offset);
+      _streamStumbles = 0;
+      _reportStreamProgress(session);
+    } catch (e) {
+      _onFeedFailed(offset, '$e');
+    } finally {
+      _feedsInFlight.remove(offset);
+    }
+  }
+
+  /// Feeds the engine the frames that begin at [adtsOffset].
+  Future<void> _feedFrames(int adtsOffset) async {
+    final session = _streamSession;
+    final index = _streamIndex;
+    final source = _source;
+    if (!_streaming || _disposed) return;
+    if (session == null || index == null || source == null) return;
+    if (adtsOffset < 0 || adtsOffset >= index.totalAdtsBytes) return;
+    if (!_feedsInFlight.add(adtsOffset)) return;
+
+    try {
+      final window = index.windowAt(adtsOffset, _feedWindowBytes);
+      final bytes = await session.read(window.fileStart, window.fileEnd);
+      // The voice may have been torn down while this read was in flight; a
+      // `null` then means "the session was released", not "the stream broke".
+      if (_disposed || !_streaming) return;
+      if (bytes == null) {
+        _onFeedFailed(adtsOffset, 'no bytes');
+        return;
+      }
+      final adts = index.assemble(window, bytes);
+      if (adts.isEmpty) {
+        _onFeedFailed(adtsOffset, 'empty window');
+        return;
+      }
+      _soloud.addPullBufferDataStream(source, adts, offset: window.adtsOffset);
+      _streamStumbles = 0;
+      _reportStreamProgress(session);
+    } catch (e) {
+      _onFeedFailed(adtsOffset, '$e');
+    } finally {
+      _feedsInFlight.remove(adtsOffset);
+    }
+  }
+
+  void _onFeedFailed(int offset, String reason) {
+    _streamStumbles++;
+    debugPrint('stream feed failed at $offset ($reason)');
+    if (_streamStarted) {
+      // Mid-song: the queue keeps its place and the engine retries; say so
+      // instead of pretending everything is fine.
+      if (_streamStumbles == 3) {
+        errorText.value = 'STREAM INTERRUPTED';
+        _bump();
+      }
+      return;
+    }
+    if (_streamStumbles >= 3) {
+      final track = currentTrack.value;
+      if (track != null) unawaited(_fallBackFromStream(track));
+    }
+  }
+
+  /// Shows transfer progress in the same readout the download path used.
+  void _reportStreamProgress(StreamSession session) {
+    if (_streamStarted) return;
+    final total = session.total;
+    if (total == null || total <= 0) return;
+    final fraction = (session.bytesAvailable / total).clamp(0.0, 1.0);
+    bufferFraction.value = fraction;
+    final length = duration.value;
+    if (length > Duration.zero) buffered.value = length * fraction;
+  }
+
+  /// The stream never produced sound: remember that, drop the voice and load
+  /// the track the classic way.
+  Future<void> _fallBackFromStream(Track track) async {
+    if (_disposed) return;
+    if (currentTrack.value?.id != track.id) return;
+    _streamFailed.add(track.id);
+    _streamWatchdog?.cancel();
+    _streamWatchdog = null;
+    debugPrint('progressive: falling back to the download route for ${track.id}');
+    await _teardownVoice();
+    if (_disposed) return;
+    buffered.value = Duration.zero;
+    bufferFraction.value = null;
+    await _startCurrent();
+  }
+
+  /// Loads and plays [queue.value][_queueIndex].
+  Future<void> _startCurrent({bool prefetchAhead = false}) async {
+    final list = queue.value;
+    if (list.isEmpty) return;
+    if (_switching) return;
+
+    _switching = true;
+    try {
+      final track = list[_queueIndex.clamp(0, list.length - 1)];
+      await initEngine();
+      if (!_engineReady) {
+        errorText.value = 'AUDIO ENGINE UNAVAILABLE';
+        return;
+      }
+
+      await _teardownVoice();
+
+      currentTrack.value = track;
+      position.value = Duration.zero;
+      duration.value = track.duration;
+      buffered.value = Duration.zero;
+      bufferFraction.value = null;
+      errorText.value = null;
+      isBuffering.value = true;
+      _bump();
+
+      // Instant play first: index the MP4 and stream its AAC frames. A `false`
+      // here means the track could not be streamed (and nothing was changed),
+      // so the staged download below takes over.
+      if (await _startProgressive(track)) {
+        if (prefetchAhead && _settings.value.prefetchNext) {
+          unawaited(_prefetchNext());
+        }
+        return;
+      }
+
+      final source = await _resolveFor(track);
+      if (source == null) {
+        errorText.value = 'TRACK UNAVAILABLE — SKIPPING';
+        isBuffering.value = false;
+        _bump();
+        _switching = false;
+        // A dead catalogue entry must not stall the queue.
+        await _autoSkipAfterFailure();
+        return;
+      }
+
+      final loaded = source.isLocalFile
+          ? await _soloud.loadFile(source.path, mode: LoadMode.disk)
+          : await _soloud.loadUrl(source.path, mode: LoadMode.disk);
+
+      if (_disposed) {
+        await _soloud.disposeSource(loaded);
+        return;
+      }
+
+      _source = loaded;
+
+      final length = _soloud.getLength(loaded);
+      if (length > Duration.zero) duration.value = length;
+
+      _finishSub = loaded.allInstancesFinished.listen((_) => _onNaturalFinish());
+
+      final handle = _soloud.play3d(loaded, 0, 0, 1, volume: 1);
+      _handle = handle;
+
+      if (!_live(handle)) {
+        // Non-blocking playback failure: reported, not thrown.
+        errorText.value = 'PLAYBACK FAILED';
+        isBuffering.value = false;
+        _bump();
+        return;
+      }
+
+      _soloud.set3dSourceMinMaxDistance(handle, 1, 8);
+      _soloud.set3dSourceAttenuation(handle, 1, 1);
+
+      if (is8DEnabled.value) _apply8DToActiveVoice();
+
+      isPlaying.value = true;
+      isBuffering.value = false;
+      buffered.value = length;
+      _startPositionTimer();
+      _startOrbitIfNeeded();
+      _advanceShuffleCursor();
+      _bump();
+
+      if (prefetchAhead && _settings.value.prefetchNext) {
+        unawaited(_prefetchNext());
+      }
+    } catch (e, stack) {
+      debugPrint('playback failed: $e\n$stack');
+      errorText.value = 'PLAYBACK ERROR';
+      isBuffering.value = false;
+      isPlaying.value = false;
+      _bump();
+    } finally {
+      _switching = false;
+    }
+  }
+
+  Future<void> _autoSkipAfterFailure() async {
+    if (queue.value.length <= 1) return;
+    final next = _peekNextIndex();
+    if (next == null) return;
+    _queueIndex = next;
+    queueIndex.value = next;
+    // One retry only: a whole dead album should stop, not spin.
+    await _startCurrent();
+  }
+
+  /// Resolves a playable source, keeping the user informed while bytes move.
+  Future<PlayableSource?> _resolveFor(Track track) async {
+    try {
+      final source = await _resolveSource(
+        track,
+        onProgress: (fraction) {
+          if (_disposed) return;
+          bufferFraction.value = fraction;
+          final total = duration.value;
+          if (fraction != null && total > Duration.zero) {
+            buffered.value = total * fraction;
+          }
+        },
+        prefetch: false,
+      );
+      bufferFraction.value = null;
+      return source;
+    } catch (e) {
+      debugPrint('resolve failed for ${track.id}: $e');
+      return null;
+    }
+  }
+
+  /// Warms the next queue entry so transitions are instant.
+  ///
+  /// With instant play on, the useful prefetch is a *live transfer*: it warms
+  /// the bytes on the wire, and when the transfer is released it keeps running
+  /// to completion so the file lands in the cache — no second download, no
+  /// doubled bandwidth.
+  Future<void> _prefetchNext() async {
+    final nextIndex = _peekNextIndex();
+    if (nextIndex == null) return;
+    final list = queue.value;
+    if (nextIndex < 0 || nextIndex >= list.length) return;
+    final next = list[nextIndex];
+    if (_staged.containsKey(next.id) || next.isDownloaded) return;
+
+    try {
+      final open = _openStream;
+      if (open != null && _settings.value.instantStart) {
+        final stream = await open(next);
+        if (stream != null) {
+          if (stream.session.isComplete) {
+            final path = stream.session.path ?? _completedPath?.call(next);
+            if (path != null && path.isNotEmpty) _staged[next.id] = path;
+          }
+          stream.session.release();
+          return;
+        }
+      }
+
+      final source = await _resolveSource(next, prefetch: true);
+      if (source != null) _staged[next.id] = source.path;
+    } catch (e) {
+      debugPrint('prefetch failed for ${next.id}: $e');
+    }
+  }
+
+  void _onNaturalFinish() {
+    if (_disposed || _switching || _crossfading) return;
+
+    if (repeatMode.value == RepeatMode.one) {
+      unawaited(_replayCurrent());
+      return;
+    }
+    unawaited(skipToNext());
+  }
+
+  /// Ends the current track exactly once, whoever noticed first — the finish
+  /// callback or the position loop that saw the buffer run dry.
+  void _notifyEnd() {
+    if (_endNotified || _disposed) return;
+    _endNotified = true;
+    _onNaturalFinish();
+  }
+
+  Future<void> _replayCurrent() async {
+    final handle = _handle;
+    if (_live(handle)) {
+      _soloud.seek(handle!, Duration.zero);
+      _soloud.setPause(handle!, false);
+      position.value = Duration.zero;
+      isPlaying.value = true;
+      _bump();
+      return;
+    }
+    await _startCurrent();
+  }
+
+  /// Stops and releases the current voice and source.
+  Future<void> _teardownVoice() async {
+    _positionTimer?.cancel();
+    await _finishSub?.cancel();
+    _finishSub = null;
+
+    // Streaming state belongs to the voice: drop it before the source goes.
+    _streamWatchdog?.cancel();
+    _streamWatchdog = null;
+    _streaming = false;
+    _streamStarted = false;
+    _streamIndex = null;
+    _streamStumbles = 0;
+    _feedsInFlight.clear();
+    final session = _streamSession;
+    _streamSession = null;
+    session?.release();
+
+    final handle = _handle;
+    _handle = null;
+    if (_live(handle)) {
+      try {
+        await _soloud.stop(handle!);
+      } catch (e) {
+        debugPrint('stop failed: $e');
+      }
+    }
+
+    final source = _source;
+    _source = null;
+    if (source != null && _soloud.isInitialized) {
+      try {
+        await _soloud.disposeSource(source);
+      } catch (e) {
+        debugPrint('dispose failed: $e');
+      }
+    }
+
+    _incomingHandle = null;
+    _incomingSource = null;
+  }
+
+  Future<void> stop() async {
+    await _teardownVoice();
+    isPlaying.value = false;
+    position.value = Duration.zero;
+    _bump();
+  }
+
+  // ------------------------------------------------------------ position loop
+
+  void _startPositionTimer() {
+    _positionTimer?.cancel();
+    _positionTimer = Timer.periodic(const Duration(milliseconds: 250), (_) {
+      if (_disposed) return;
+      final handle = _handle;
+      if (!_live(handle)) return;
+      try {
+        final current = _soloud.getPosition(handle!);
+        position.value = current;
+        final playing = !_soloud.getPause(handle);
+        if (playing != isPlaying.value) {
+          isPlaying.value = playing;
+          if (playing && is8DEnabled.value) {
+            if (!_orbitClock.isRunning) _orbitClock.start();
+            _startOrbitIfNeeded();
+          } else if (!playing) {
+            _orbitClock.stop();
+          }
+          _bump();
+        }
+        if (playing && current > const Duration(milliseconds: 200) && isBuffering.value) {
+          isBuffering.value = false;
+          _streamStarted = true;
+          _bump();
+        }
+        if (_streaming) _pollStreamBuffer();
+        _maybeCrossfade(current);
+      } catch (e) {
+        debugPrint('position poll failed: $e');
+      }
+    });
+  }
+
+  /// Mirrors the engine's decoded-buffer window into the progress readout, and
+  /// notices a pull stream that ran to its end without a finish callback.
+  void _pollStreamBuffer() {
+    final source = _source;
+    if (source == null) return;
+    final total = duration.value;
+    try {
+      final range = _soloud.getPullBufferTimeRange(source);
+      buffered.value = range.endTime;
+      if (total > Duration.zero) {
+        bufferFraction.value =
+            (range.endTime.inMilliseconds / total.inMilliseconds)
+                .clamp(0.0, 1.0);
+      }
+    } catch (e) {
+      // The source may have just been disposed: the next tick recovers.
+    }
+    if (isPlaying.value &&
+        total > Duration.zero &&
+        position.value >= total - const Duration(milliseconds: 400)) {
+      // `allInstancesFinished` is not guaranteed for pull streams, so the end
+      // of the timeline is treated as the end of the track too.
+      _notifyEnd();
+    }
+  }
+
+  // -------------------------------------------------------------- crossfade
+
+  void _maybeCrossfade(Duration current) {
+    final fadeSeconds = _settings.value.crossfadeSeconds;
+    if (fadeSeconds <= 0) return;
+    if (_crossfading || _switching || _disposed) return;
+    if (!isPlaying.value) return;
+
+    final total = duration.value;
+    if (total <= Duration.zero) return;
+
+    final remaining = total - current;
+    if (remaining > Duration(seconds: fadeSeconds)) return;
+    if (remaining < Duration.zero) return;
+
+    final nextIndex = _peekNextIndex();
+    if (nextIndex == null) return;
+    final list = queue.value;
+    if (nextIndex < 0 || nextIndex >= list.length) return;
+
+    final next = list[nextIndex];
+    final staged = _staged[next.id] ??
+        _completedPath?.call(next) ??
+        next.localPath;
+    // Crossfading needs the next file *already on disk*; if the prefetch has
+    // not landed we let the track end normally rather than stalling the audio.
+    if (staged == null || staged.isEmpty) return;
+
+    _crossfading = true;
+    unawaited(_runCrossfade(next, nextIndex, staged, Duration(seconds: fadeSeconds)));
+  }
+
+  Future<void> _runCrossfade(
+    Track next,
+    int nextIndex,
+    String stagedPath,
+    Duration fade,
+  ) async {
+    try {
+      final incoming = await _soloud.loadFile(stagedPath, mode: LoadMode.disk);
+      if (_disposed || !_crossfading) {
+        await _soloud.disposeSource(incoming);
+        return;
+      }
+
+      final handle = _soloud.play3d(incoming, 0, 0, 1, volume: 0);
+      if (!_live(handle)) {
+        await _soloud.disposeSource(incoming);
+        _crossfading = false;
+        return;
+      }
+
+      final outgoingHandle = _handle;
+      final outgoingSource = _source;
+
+      _incomingSource = incoming;
+      _incomingHandle = handle;
+
+      _soloud.fadeVolume(handle, 1.0, fade);
+      if (_live(outgoingHandle)) {
+        _soloud.fadeVolume(outgoingHandle!, 0.0, fade);
+      }
+
+      // Adopt the incoming track as "now playing" immediately so every surface
+      // (mini-player, lyrics, 8D orbit, lock screen) converges at once.
+      _handle = handle;
+      _source = incoming;
+      _incomingHandle = null;
+      _incomingSource = null;
+      _queueIndex = nextIndex;
+      queueIndex.value = nextIndex;
+      currentTrack.value = next;
+      position.value = Duration.zero;
+      duration.value = _soloud.getLength(incoming);
+      buffered.value = duration.value;
+      _advanceShuffleCursor();
+      _bump();
+
+      await _finishSub?.cancel();
+      _finishSub = incoming.allInstancesFinished.listen((_) => _onNaturalFinish());
+
+      _soloud.set3dSourceMinMaxDistance(handle, 1, 8);
+      if (is8DEnabled.value) _apply8DToActiveVoice();
+
+      _crossfadeTimer?.cancel();
+      _crossfadeTimer = Timer(fade + const Duration(milliseconds: 80), () async {
+        _crossfading = false;
+        if (_live(outgoingHandle)) {
+          try {
+            await _soloud.stop(outgoingHandle!);
+          } catch (_) {}
+        }
+        if (outgoingSource != null && _soloud.isInitialized) {
+          try {
+            await _soloud.disposeSource(outgoingSource);
+          } catch (_) {}
+        }
+        if (_settings.value.prefetchNext) unawaited(_prefetchNext());
+      });
+    } catch (e) {
+      debugPrint('crossfade failed, falling back to hard cut: $e');
+      _crossfading = false;
+      _incomingHandle = null;
+      _incomingSource = null;
+      _queueIndex = nextIndex;
+      queueIndex.value = nextIndex;
+      await _startCurrent(prefetchAhead: true);
+    }
+  }
+
+  /// Aborts an in-flight crossfade (user paused, seeked or skipped).
+  void _abortCrossfade() {
+    _crossfadeTimer?.cancel();
+    _crossfading = false;
+    final incomingHandle = _incomingHandle;
+    final incomingSource = _incomingSource;
+    _incomingHandle = null;
+    _incomingSource = null;
+    if (_live(incomingHandle)) {
+      unawaited(_soloud.stop(incomingHandle!));
+    }
+    if (incomingSource != null && _soloud.isInitialized) {
+      unawaited(_soloud.disposeSource(incomingSource));
+    }
+  }
+
+  // ---------------------------------------------------------------- 8D audio
+
+  /// The 1-tap hardware toggle.
+  Future<void> set8DEnabled(bool enabled) async {
+    if (is8DEnabled.value == enabled) return;
+    is8DEnabled.value = enabled;
+    _bump();
+
+    if (!_engineReady) {
+      if (enabled) await initEngine();
+    }
+    if (enabled) {
+      _apply8DParameters();
+      _apply8DToActiveVoice();
+      _startOrbitIfNeeded();
+    } else {
+      _stopOrbit();
+      _resetSpatialToStereo();
+    }
+  }
+
+  Future<void> toggle8D() => set8DEnabled(!is8DEnabled.value);
+
+  /// Live calibration from Settings or the Now Playing calibration sheet.
+  void update8DParameters({
+    double? orbitSeconds,
+    double? reverbMix,
+    bool? rearLowPass,
+  }) {
+    final next = _settings.value.copyWith(
+      orbitSeconds: orbitSeconds,
+      reverbMix: reverbMix,
+      rearLowPassEnabled: rearLowPass,
+    );
+    _settings.update(next);
+  }
+
+  void _onSettingsChanged() {
+    if (_disposed) return;
+    _apply8DParameters();
+    _applyEqualizer();
+    _applyBassBoost();
+    if (!is8DEnabled.value) return;
+    _apply8DToActiveVoice();
+  }
+
+  /// Configures the global 8D filter chain (stages 2 and 3).
+  void _apply8DParameters() {
+    if (!_engineReady) return;
+    final s = _settings.value;
+    try {
+      final reverb = _soloud.filters.freeverbFilter;
+      if (is8DEnabled.value) {
+        if (!reverb.isActive) reverb.activate();
+        reverb.roomSize.value = 0.72;
+        reverb.damp.value = 0.50;
+        reverb.width.value = 1.0;
+        reverb.wet.value = 0.0;
+        reverb.wet.fadeFilterParameter(
+          to: s.reverbMix.clamp(0.0, 0.5),
+          time: const Duration(milliseconds: 350),
+        );
+      }
+
+      final biquad = _soloud.filters.biquadResonantFilter;
+      if (is8DEnabled.value && s.rearLowPassEnabled) {
+        if (!biquad.isActive) biquad.activate();
+        biquad.type.value = 0; // LOWPASS
+        biquad.resonance.value = 0.707;
+        if (biquad.frequency.value < 100) biquad.frequency.value = 16000;
+        biquad.wet.value = 1.0;
+      }
+    } catch (e) {
+      debugPrint('8D parameter application failed: $e');
+    }
+  }
+
+  /// Re-centres the voice and releases the spatial filters.
+  void _resetSpatialToStereo() {
+    if (!_engineReady) return;
+    try {
+      final handle = _handle;
+      if (_live(handle)) {
+        _soloud.set3dSourcePosition(handle!, 0, 0, 1);
+        _soloud.fadePan(handle!, 0.0, const Duration(milliseconds: 300));
+      }
+
+      final reverb = _soloud.filters.freeverbFilter;
+      if (reverb.isActive) {
+        reverb.wet.fadeFilterParameter(to: 0.0, time: const Duration(milliseconds: 300));
+        Timer(const Duration(milliseconds: 340), () {
+          if (_disposed || is8DEnabled.value) return;
+          try {
+            if (_soloud.filters.freeverbFilter.isActive) {
+              _soloud.filters.freeverbFilter.deactivate();
+            }
+          } catch (_) {}
+        });
+      }
+
+      final biquad = _soloud.filters.biquadResonantFilter;
+      if (biquad.isActive) biquad.deactivate();
+    } catch (e) {
+      debugPrint('8D reset failed: $e');
+    }
+  }
+
+  void _apply8DToActiveVoice() {
+    final handle = _handle;
+    if (!_live(handle)) return;
+    try {
+      _soloud.set3dSourcePosition(handle!, 0, 0, 1);
+      _soloud.setPan(handle!, 0.0);
+      _apply8DParameters();
+    } catch (e) {
+      debugPrint('8D voice setup failed: $e');
+    }
+  }
+
+  void _startOrbitIfNeeded() {
+    if (!is8DEnabled.value || !isPlaying.value) {
+      _orbitTimer?.cancel();
+      _orbitTimer = null;
+      _orbitClock.stop();
+      return;
+    }
+
+    if (!_orbitClock.isRunning) {
+      _orbitClock.start();
+    }
+
+    if (_orbitTimer != null && _orbitTimer!.isActive) return;
+
+    _orbitTimer?.cancel();
+    _orbitTimer = Timer.periodic(const Duration(milliseconds: 16), (_) {
+      if (_disposed || !is8DEnabled.value) {
+        _stopOrbit();
+        return;
+      }
+      final handle = _handle;
+      if (!_live(handle)) return;
+      if (!isPlaying.value) {
+        if (_orbitClock.isRunning) _orbitClock.stop();
+        return;
+      }
+      if (!_orbitClock.isRunning) {
+        _orbitClock.start();
+      }
+
+      try {
+        final t = _orbitClock.elapsedMilliseconds / 1000.0;
+        final period = _settings.value.orbitSeconds.clamp(5.0, 20.0);
+        final theta = (2 * math.pi * t) / period;
+
+        final x = 2.0 * math.sin(theta);
+        final z = 2.0 * math.cos(theta);
+
+        _soloud.set3dSourcePosition(handle!, x, 0, z);
+        _soloud.setPan(handle!, math.sin(theta) * 0.85);
+
+        if (_settings.value.rearLowPassEnabled) {
+          final frontFactor = (math.cos(theta) + 1.0) / 2.0;
+          final cutoff = 3200.0 + (12800.0 * frontFactor);
+          final biquad = _soloud.filters.biquadResonantFilter;
+          if (biquad.isActive) biquad.frequency.value = cutoff;
+        }
+      } catch (_) {
+        // A single dropped frame of orbit is not worth surfacing.
+      }
+    });
+  }
+
+  void _stopOrbit() {
+    _orbitTimer?.cancel();
+    _orbitTimer = null;
+    _orbitClock
+      ..stop()
+      ..reset();
+    final handle = _handle;
+    if (_live(handle)) {
+      try {
+        _soloud.set3dSourcePosition(handle!, 0, 0, 1);
+        _soloud.setPan(handle!, 0.0);
+      } catch (_) {}
+    }
+  }
+
+  // -------------------------------------------------------------- equaliser
+
+  /// Drives SoLoud's parametric EQ: one band per preset slider.
+  void _applyEqualizer() {
+    if (!_engineReady) return;
+    final s = _settings.value;
+    try {
+      final eq = _soloud.filters.parametricEqFilter;
+      if (!s.eqEnabled) {
+        if (eq.isActive) eq.deactivate();
+        return;
+      }
+      if (!eq.isActive) eq.activate();
+
+      eq.numBands.value = EqPreset.bandFrequencies.length.toDouble();
+      eq.wet.value = 1.0;
+
+      for (var i = 0; i < EqPreset.bandFrequencies.length; i++) {
+        if (i < s.eqGains.length) {
+          eq.bandGain(i).value = s.eqGains[i].clamp(0.0, 4.0);
+        }
+        eq.bandFreq(i).value = EqPreset.bandFrequencies[i];
+        eq.bandQ(i).value = 1.0;
+      }
+    } catch (e) {
+      debugPrint('EQ application failed: $e');
+    }
+  }
+
+  void _applyBassBoost() {
+    if (!_engineReady) return;
+    final s = _settings.value;
+    try {
+      final bass = _soloud.filters.bassBoostFilter;
+      if (s.bassBoost <= 0.0) {
+        if (bass.isActive) bass.deactivate();
+        return;
+      }
+      if (!bass.isActive) bass.activate();
+      bass.wet.value = 1.0;
+      bass.boost.value = s.bassBoost.clamp(0.0, 4.0);
+    } catch (e) {
+      debugPrint('Bass boost application failed: $e');
+    }
+  }
+
+  /// Pushes a preset (or a manual band edit) into both the settings and engine.
+  void setEqualizer({
+    bool? enabled,
+    String? presetName,
+    List<double>? gains,
+  }) {
+    var next = _settings.value;
+    if (enabled != null) next = next.copyWith(eqEnabled: enabled);
+    if (presetName != null) next = next.copyWith(eqPresetName: presetName);
+    if (gains != null && gains.length == EqPreset.bandFrequencies.length) {
+      next = next.copyWith(eqGains: gains, eqPresetName: 'Custom');
+    }
+    _settings.update(next);
+  }
+
+  void setBassBoost(double value) {
+    _settings.update(_settings.value.copyWith(bassBoost: value.clamp(0.0, 4.0)));
+  }
+
+  // ------------------------------------------------------------- visualiser
+
+  /// Enables SoLoud's FFT feed only while something is actually watching it.
+  Future<void> setVisualizerActive(bool active) async {
+    if (!_engineReady) return;
+    if (active == _visualizerOn) return;
+    _visualizerOn = active;
+    try {
+      if (active) {
+        _soloud.setVisualizationEnabled(
+          true,
+          windowSize: 256,
+          kind: VisualizationKind.waveAndFft,
+        );
+        _vizSub = _soloud.audioVisualizationEvents.listen((data) {
+          final fft = data.fftData;
+          if (fft != null && !_fftController.isClosed) _fftController.add(fft);
+        });
+      } else {
+        await _vizSub?.cancel();
+        _vizSub = null;
+        _soloud.setVisualizationEnabled(false);
+      }
+    } catch (e) {
+      debugPrint('visualiser toggle failed: $e');
+    }
+  }
+
+  // ------------------------------------------------------------- sleep timer
+
+  /// `null` cancels. The fade-out is left to the engine so it is sample-accurate.
+  void setSleepTimer(Duration? duration) {
+    _sleepTimer?.cancel();
+    _sleepTimer = null;
+    sleepRemaining.value = duration;
+    if (duration == null) return;
+
+    var remaining = duration;
+    _sleepTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      remaining -= const Duration(seconds: 1);
+      sleepRemaining.value = remaining <= Duration.zero ? null : remaining;
+      if (remaining > Duration.zero) return;
+
+      timer.cancel();
+      _sleepTimer = null;
+      unawaited(_fadeOutAndPause());
+    });
+  }
+
+  Future<void> _fadeOutAndPause() async {
+    final handle = _handle;
+    if (_live(handle)) {
+      try {
+        _soloud.fadeVolume(handle!, 0.0, const Duration(seconds: 3));
+        await Future<void>.delayed(const Duration(seconds: 3));
+        await pause();
+        if (_live(handle)) _soloud.setVolume(handle!, 1.0);
+        return;
+      } catch (e) {
+        debugPrint('sleep fade failed: $e');
+      }
+    }
+    await pause();
+  }
+
+  // ------------------------------------------------------------------ ducking
+
+  /// Called by the OS integration layer when another app takes audio focus.
+  void duck() {
+    final handle = _handle;
+    if (!_live(handle)) return;
+    try {
+      _soloud.fadeVolume(handle!, 0.25, const Duration(milliseconds: 200));
+    } catch (_) {}
+  }
+
+  void unduck() {
+    final handle = _handle;
+    if (!_live(handle)) return;
+    try {
+      _soloud.fadeVolume(handle!, 1.0, const Duration(milliseconds: 300));
+    } catch (_) {}
+  }
+
+  // ------------------------------------------------------------------ volume
+
+  void setVolume(double value) {
+    if (!_engineReady) return;
+    try {
+      _soloud.setGlobalVolume(value.clamp(0.0, 1.0));
+    } catch (_) {}
+  }
+
+  // ------------------------------------------------------------------ toggles
+
+  void setShuffle(bool enabled) {
+    shuffleEnabled.value = enabled;
+    _rebuildShuffleOrder(seedWith: _queueIndex);
+    _bump();
+  }
+
+  void setRepeatMode(RepeatMode mode) {
+    repeatMode.value = mode;
+    _bump();
+  }
+
+  void cycleRepeatMode() {
+    final next = switch (repeatMode.value) {
+      RepeatMode.off => RepeatMode.all,
+      RepeatMode.all => RepeatMode.one,
+      RepeatMode.one => RepeatMode.off,
+    };
+    setRepeatMode(next);
+  }
+
+  void _bump() => stateRevision.value++;
+
+  // -------------------------------------------------------------- teardown
+
+  Future<void> disposeEngine() async {
+    _disposed = true;
+    _positionTimer?.cancel();
+    _crossfadeTimer?.cancel();
+    _sleepTimer?.cancel();
+    _stopOrbit();
+    await _vizSub?.cancel();
+    await _fftController.close();
+    await _teardownVoice();
+    try {
+      if (_soloud.isInitialized) _soloud.deinit();
+    } catch (_) {}
+  }
+}
