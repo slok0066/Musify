@@ -178,6 +178,26 @@ class PlaybackService {
   int _streamStumbles = 0;
   Timer? _streamWatchdog;
 
+  /// Serialises stream re-seeks: one drag gesture produces exactly one voice
+  /// rebuild, however fast the scrubbing is.
+  bool _seekingStream = false;
+
+  /// True while a stream is migrating to a finished disk file, so the
+  /// completion poll cannot start the same migration twice.
+  bool _switchingToLocal = false;
+
+  /// Bumped whenever the pull stream's byte window is replaced (start, seek,
+  /// teardown) and whenever the voice migrates to a disk file. Feeds capture
+  /// it on entry and abort when it changes, so a read that was in flight
+  /// during a seek can never write into the wrong source.
+  int _streamEpoch = 0;
+
+  /// After a re-seek the engine must produce sound before [_seekDeadline];
+  /// [_seekTarget] remembers where the user asked to be so the download
+  /// route can take over at that position instead of leaving silence.
+  Duration? _seekTarget;
+  DateTime? _seekDeadline;
+
   /// The current track has already been reported as finished, so a second
   /// signal (finish callback, end-of-buffer detection) cannot advance the queue
   /// twice.
@@ -413,6 +433,14 @@ class PlaybackService {
         if (!_orbitClock.isRunning) _orbitClock.start();
         _startOrbitIfNeeded();
       }
+      // A paused stream can resume onto a dead connection (a stall in the
+      // background, or a seek made while paused), so give it the same
+      // "sound shortly or the download route takes over" deadline a live
+      // seek gets. A healthy stream clears it within a second.
+      if (_streaming && _streamStarted && position.value > Duration.zero) {
+        _seekTarget = position.value;
+        _seekDeadline = DateTime.now().add(const Duration(seconds: 8));
+      }
       _bump();
       return;
     }
@@ -430,6 +458,10 @@ class PlaybackService {
     _seekSuppressedUntil = DateTime.now().add(const Duration(milliseconds: 300));
     position.value = clamped;
     _bump();
+
+    // Any pending re-seek watchdog belongs to the previous gesture.
+    _seekDeadline = null;
+    _seekTarget = null;
 
     final track = currentTrack.value;
     if (track == null) return;
@@ -473,81 +505,136 @@ class PlaybackService {
 
   /// Instantly reposition the progressive audio stream to [target] without
   /// downloading the whole file first.
+  ///
+  /// The pull buffer is rebuilt around the target frame's byte window — exact
+  /// via the MP4 sample table, byte-fraction for a raw elementary stream. The
+  /// operation is transactional: the old voice keeps playing until the new one
+  /// is live, and every failure path puts the stream back exactly where it
+  /// was, so a drag can never leave a silent player behind.
   Future<void> _seekProgressiveStream(Duration target) async {
     final session = _streamSession;
-    final index = _streamIndex;
     if (session == null) return;
+    if (_seekingStream) return;
+    _seekingStream = true;
 
-    int startByteOffset;
-    Duration actualStartTime;
-    int remainingAudioBytes;
-
-    if (index != null) {
-      startByteOffset = index.adtsOffsetAtTime(target);
-      actualStartTime = index.timeAtAdtsOffset(startByteOffset);
-      remainingAudioBytes = (index.totalAdtsBytes - startByteOffset).clamp(1024, index.totalAdtsBytes);
-    } else {
-      final total = session.total ?? 1;
-      final totalMs = duration.value.inMilliseconds <= 0 ? 1 : duration.value.inMilliseconds;
-      final fraction = (target.inMilliseconds / totalMs).clamp(0.0, 1.0);
-      startByteOffset = (total * fraction).round();
-      actualStartTime = target;
-      remainingAudioBytes = (total - startByteOffset).clamp(1024, total);
-    }
-
-    _streamByteOffset = startByteOffset;
-    _streamTimeOffset = actualStartTime;
-    _feedsInFlight.clear();
-
-    // Proactively jump the network connection to target frame so read() returns immediately
-    if (index != null) {
-      final window = index.windowAt(startByteOffset, _feedWindowBytes);
-      session.jumpTo(window.fileStart);
-    } else {
-      session.jumpTo(startByteOffset);
-    }
-
-    _streamWatchdog?.cancel();
-    _streamWatchdog = null;
-    final wasPlaying = isPlaying.value;
-
-    final oldHandle = _handle;
-    final oldSource = _source;
-    await _finishSub?.cancel();
-
+    // Nothing below may escape without re-arming seeking: a stuck flag would
+    // disable the scrubber for the rest of the session.
     try {
-      final source = _soloud.setPullBufferStream(
-        audioSizeBytes: remainingAudioBytes,
-        format: BufferType.auto,
-        bufferSizeBytes: 4 * 1024 * 1024,
-        bufferTriggerPosition: 0.75,
-        sampleRate: index?.sampleRate ?? 44100,
-        channels: (index?.channels ?? 2) == 1 ? Channels.mono : Channels.stereo,
-        onMoreDataIsNeeded: (offset) => unawaited(_feedStream(offset)),
-        onBuffering: (buffering, handle, time) {
-          if (_disposed || !_streaming) return;
-          isBuffering.value = buffering;
-          if (!buffering) _streamStarted = true;
-          _bump();
-        },
-        onAudioDuration: (seconds) {},
-      );
+      final index = _streamIndex;
+      final prevByteOffset = _streamByteOffset;
+      final prevTimeOffset = _streamTimeOffset;
+      final prevEpoch = _streamEpoch;
+      final wasPlaying = isPlaying.value;
 
-      _source = source;
-      final handle = _soloud.play3d(source, 0, 0, 1, volume: 1);
-      _handle = handle;
+      int startByteOffset;
+      Duration actualStartTime;
+      int remainingAudioBytes;
 
-      if (_live(handle)) {
-        _soloud.set3dSourceMinMaxDistance(handle, 1, 8);
-        _soloud.set3dSourceAttenuation(handle, 1, 1);
-        if (is8DEnabled.value) _apply8DToActiveVoice();
-        if (!wasPlaying) {
-          _soloud.setPause(handle, true);
-        }
-        _finishSub = source.allInstancesFinished.listen((_) => _notifyEnd());
+      if (index != null) {
+        startByteOffset = index.adtsOffsetAtTime(target);
+        actualStartTime = index.timeAtAdtsOffset(startByteOffset);
+        remainingAudioBytes = (index.totalAdtsBytes - startByteOffset)
+            .clamp(1024, index.totalAdtsBytes);
+      } else {
+        final total = session.total ?? 1;
+        final totalMs = duration.value.inMilliseconds <= 0
+            ? 1
+            : duration.value.inMilliseconds;
+        final fraction = (target.inMilliseconds / totalMs).clamp(0.0, 1.0);
+        startByteOffset = (total * fraction).round();
+        actualStartTime = target;
+        remainingAudioBytes = (total - startByteOffset).clamp(1024, total);
       }
 
-      // Stop previous stream voice
+      // Commit the new window. Everything from here to the voice adoption
+      // below is synchronous, so no feed can observe a half-applied state;
+      // the epoch bump retires whatever was already in flight.
+      _streamEpoch++;
+      _streamByteOffset = startByteOffset;
+      _streamTimeOffset = actualStartTime;
+      _feedsInFlight.clear();
+
+      // Proactively reposition the connection to the target frame so the
+      // first read returns without waiting for the pump to walk there.
+      if (index != null) {
+        final window = index.windowAt(startByteOffset, _feedWindowBytes);
+        session.jumpTo(window.fileStart);
+      } else {
+        session.jumpTo(startByteOffset);
+      }
+
+      _streamWatchdog?.cancel();
+      _streamWatchdog = null;
+
+      final oldHandle = _handle;
+      final oldSource = _source;
+
+      AudioSource? freshSource;
+      SoundHandle? freshHandle;
+      try {
+        final built = _soloud.setPullBufferStream(
+          audioSizeBytes: remainingAudioBytes,
+          format: BufferType.auto,
+          bufferSizeBytes: 4 * 1024 * 1024,
+          bufferTriggerPosition: 0.75,
+          sampleRate: index?.sampleRate ?? 44100,
+          channels:
+              (index?.channels ?? 2) == 1 ? Channels.mono : Channels.stereo,
+          onMoreDataIsNeeded: (offset) => unawaited(_feedStream(offset)),
+          onBuffering: (buffering, handle, time) {
+            if (_disposed || !_streaming) return;
+            isBuffering.value = buffering;
+            if (!buffering) _streamStarted = true;
+            _bump();
+          },
+          onAudioDuration: (seconds) {},
+        );
+        freshSource = built;
+        freshHandle = _soloud.play3d(built, 0, 0, 1, volume: 1);
+      } catch (e) {
+        debugPrint('_seekProgressiveStream rebuild failed: $e');
+      }
+
+      if (freshHandle == null || !_live(freshHandle)) {
+        // The rebuild did not take: restore the window and keep the old
+        // voice playing. The seek simply did not happen — never silence.
+        final rejected = freshSource;
+        if (rejected != null) {
+          try {
+            unawaited(_soloud.disposeSource(rejected));
+          } catch (_) {}
+        }
+        _streamEpoch = prevEpoch;
+        _streamByteOffset = prevByteOffset;
+        _streamTimeOffset = prevTimeOffset;
+        _feedsInFlight.clear();
+        if (index != null) {
+          final window = index.windowAt(prevByteOffset, _feedWindowBytes);
+          session.jumpTo(window.fileStart);
+        } else {
+          session.jumpTo(prevByteOffset);
+        }
+        position.value = prevTimeOffset;
+        isBuffering.value = false;
+        _bump();
+        return;
+      }
+
+      // The rebuild took: adopt the fresh voice first so every feed that
+      // fires from here on targets it, then retire the old one.
+      final oldSub = _finishSub;
+      final adoptedSource = freshSource;
+      _source = adoptedSource;
+      _handle = freshHandle;
+      _finishSub =
+          adoptedSource?.allInstancesFinished.listen((_) => _notifyEnd());
+
+      _soloud.set3dSourceMinMaxDistance(freshHandle, 1, 8);
+      _soloud.set3dSourceAttenuation(freshHandle, 1, 1);
+      if (!wasPlaying) _soloud.setPause(freshHandle, true);
+      if (is8DEnabled.value) _apply8DToActiveVoice();
+
+      unawaited(oldSub?.cancel());
       if (_live(oldHandle)) {
         try {
           _soloud.stop(oldHandle!);
@@ -559,28 +646,60 @@ class PlaybackService {
         } catch (_) {}
       }
 
+      _streamStumbles = 0;
       position.value = actualStartTime;
-      _seekSuppressedUntil = DateTime.now().add(const Duration(milliseconds: 300));
+      _seekSuppressedUntil =
+          DateTime.now().add(const Duration(milliseconds: 300));
+      isBuffering.value = true;
       _bump();
-    } catch (e) {
-      debugPrint('_seekProgressiveStream failed: $e');
+
+      // The rebuilt stream must produce sound shortly, or the download route
+      // takes over at exactly the position the user picked.
+      if (wasPlaying) {
+        _seekTarget = actualStartTime;
+        _seekDeadline = DateTime.now().add(const Duration(seconds: 8));
+      } else {
+        _seekTarget = null;
+        _seekDeadline = null;
+      }
+    } finally {
+      _seekingStream = false;
     }
   }
 
-  /// Migrates an active voice from an unseekable progressive stream to a complete
-  /// seekable disk file, seamlessly positioning at [seekTo].
+  /// Migrates an active voice from an unseekable progressive stream to a
+  /// complete seekable disk file, seamlessly positioning at [seekTo].
+  ///
+  /// Re-entrant calls are ignored (the stream-completion poll fires four times
+  /// a second), and a failed migration leaves the live stream untouched.
   Future<void> _switchToLocalFile(String path, {required Duration seekTo}) async {
+    if (_switchingToLocal) return;
+    _switchingToLocal = true;
     try {
+      final wasPlaying = isPlaying.value;
       final loaded = await _soloud.loadFile(path, mode: LoadMode.disk);
       if (_disposed) {
         await _soloud.disposeSource(loaded);
         return;
       }
 
+      final handle = _soloud.play3d(loaded, 0, 0, 1, volume: 1);
+      if (!_live(handle)) {
+        // The disk copy did not take: keep streaming rather than go silent.
+        try {
+          await _soloud.disposeSource(loaded);
+        } catch (_) {}
+        return;
+      }
+
       final oldHandle = _handle;
       final oldSource = _source;
       final oldSession = _streamSession;
+      final oldSub = _finishSub;
 
+      // Adopt the loaded file: the stream is retired in the same turn so no
+      // feed can write into a half-migrated voice.
+      _streamEpoch++;
       _streamSession = null;
       _streamIndex = null;
       _streaming = false;
@@ -588,32 +707,32 @@ class PlaybackService {
       _streamTimeOffset = Duration.zero;
       _streamWatchdog?.cancel();
       _streamWatchdog = null;
+      _seekDeadline = null;
+      _seekTarget = null;
+      _feedsInFlight.clear();
 
-      final handle = _soloud.play3d(loaded, 0, 0, 1, volume: 1);
       _source = loaded;
       _handle = handle;
+      _soloud.set3dSourceMinMaxDistance(handle, 1, 8);
+      _soloud.set3dSourceAttenuation(handle, 1, 1);
+      if (!wasPlaying) _soloud.setPause(handle, true);
+      if (is8DEnabled.value) _apply8DToActiveVoice();
 
-      if (_live(handle)) {
-        _soloud.set3dSourceMinMaxDistance(handle, 1, 8);
-        _soloud.set3dSourceAttenuation(handle, 1, 1);
-        if (is8DEnabled.value) _apply8DToActiveVoice();
+      unawaited(oldSub?.cancel());
+      _finishSub = loaded.allInstancesFinished.listen((_) => _onNaturalFinish());
 
-        _finishSub?.cancel();
-        _finishSub = loaded.allInstancesFinished.listen((_) => _onNaturalFinish());
+      _soloud.seek(handle, seekTo);
+      position.value = seekTo;
+      final length = _soloud.getLength(loaded);
+      if (length > Duration.zero) duration.value = length;
+      buffered.value = duration.value;
+      bufferFraction.value = 1.0;
 
-        _soloud.seek(handle, seekTo);
-        position.value = seekTo;
-        final length = _soloud.getLength(loaded);
-        if (length > Duration.zero) duration.value = length;
-        buffered.value = duration.value;
-        bufferFraction.value = 1.0;
-
-        if (is8DEnabled.value) {
-          _orbitClock
-            ..stop()
-            ..reset()
-            ..start();
-        }
+      if (is8DEnabled.value) {
+        _orbitClock
+          ..stop()
+          ..reset()
+          ..start();
       }
 
       if (_live(oldHandle)) {
@@ -632,6 +751,8 @@ class PlaybackService {
       _bump();
     } catch (e) {
       debugPrint('_switchToLocalFile failed: $e');
+    } finally {
+      _switchingToLocal = false;
     }
   }
 
@@ -783,6 +904,7 @@ class PlaybackService {
     _streamStumbles = 0;
     _streamStarted = false;
     _feedsInFlight.clear();
+    _streamEpoch++;
     _endNotified = false;
     if (index != null) duration.value = index.duration;
     buffered.value = Duration.zero;
@@ -890,6 +1012,7 @@ class PlaybackService {
   Future<void> _feedRaw(int offset) async {
     final session = _streamSession;
     final source = _source;
+    final epoch = _streamEpoch;
     if (!_streaming || _disposed) return;
     if (session == null || source == null) return;
     final total = session.total;
@@ -906,7 +1029,9 @@ class PlaybackService {
     try {
       final end = math.min(fileOffset + _feedWindowBytes, total);
       final bytes = await session.read(fileOffset, end);
-      if (_disposed || !_streaming) return;
+      // The window may have been replaced while this read was in flight
+      // (a seek, a migration to disk): the bytes are stale, drop them.
+      if (_disposed || !_streaming || epoch != _streamEpoch) return;
       if (bytes == null || bytes.isEmpty) {
         _onFeedFailed(fileOffset, 'no bytes');
         return;
@@ -926,6 +1051,7 @@ class PlaybackService {
     final session = _streamSession;
     final index = _streamIndex;
     final source = _source;
+    final epoch = _streamEpoch;
     if (!_streaming || _disposed) return;
     if (session == null || index == null || source == null) return;
     final targetAdtsOffset = _streamByteOffset + offset;
@@ -934,10 +1060,13 @@ class PlaybackService {
 
     try {
       final window = index.windowAt(targetAdtsOffset, _feedWindowBytes);
+      // Mapped against the window that was committed *now*: a seek during the
+      // read must not re-base this chunk into the new stream.
+      final bufferOffset = window.adtsOffset - _streamByteOffset;
       final bytes = await session.read(window.fileStart, window.fileEnd);
       // The voice may have been torn down while this read was in flight; a
       // `null` then means "the session was released", not "the stream broke".
-      if (_disposed || !_streaming) return;
+      if (_disposed || !_streaming || epoch != _streamEpoch) return;
       if (bytes == null) {
         _onFeedFailed(targetAdtsOffset, 'no bytes');
         return;
@@ -947,7 +1076,6 @@ class PlaybackService {
         _onFeedFailed(targetAdtsOffset, 'empty window');
         return;
       }
-      final bufferOffset = window.adtsOffset - _streamByteOffset;
       if (bufferOffset >= 0) {
         _soloud.addPullBufferDataStream(source, adts, offset: bufferOffset);
       }
@@ -990,19 +1118,27 @@ class PlaybackService {
   }
 
   /// The stream never produced sound: remember that, drop the voice and load
-  /// the track the classic way.
-  Future<void> _fallBackFromStream(Track track) async {
+  /// the track the classic way, landing back on [startAt] when it is known.
+  Future<void> _fallBackFromStream(
+    Track track, {
+    Duration startAt = Duration.zero,
+  }) async {
     if (_disposed) return;
     if (currentTrack.value?.id != track.id) return;
     _streamFailed.add(track.id);
     _streamWatchdog?.cancel();
     _streamWatchdog = null;
+    _seekDeadline = null;
+    _seekTarget = null;
     debugPrint('progressive: falling back to the download route for ${track.id}');
     await _teardownVoice();
     if (_disposed) return;
     buffered.value = Duration.zero;
     bufferFraction.value = null;
     await _startCurrent();
+    if (_disposed) return;
+    if (currentTrack.value?.id != track.id) return;
+    if (startAt > Duration.zero) await seek(startAt);
   }
 
   /// Loads and plays [queue.value][_queueIndex].
@@ -1220,6 +1356,9 @@ class PlaybackService {
     _streamByteOffset = 0;
     _streamTimeOffset = Duration.zero;
     _streamStumbles = 0;
+    _streamEpoch++;
+    _seekDeadline = null;
+    _seekTarget = null;
     _feedsInFlight.clear();
     final session = _streamSession;
     _streamSession = null;
@@ -1271,6 +1410,7 @@ class PlaybackService {
         final current = _soloud.getPosition(handle!);
         final actualPos = _streaming ? (_streamTimeOffset + current) : current;
         position.value = actualPos;
+        _checkSeekWatchdog(actualPos);
         final playing = !_soloud.getPause(handle);
         if (playing != isPlaying.value) {
           isPlaying.value = playing;
@@ -1293,6 +1433,27 @@ class PlaybackService {
         debugPrint('position poll failed: $e');
       }
     });
+  }
+
+  /// A re-seek that produced no audio before its deadline hands the position
+  /// to the download route at the exact spot the scrubber was dropped — slow,
+  /// but the listener always ends up where they asked to be.
+  void _checkSeekWatchdog(Duration actualPos) {
+    final deadline = _seekDeadline;
+    if (deadline == null) return;
+    final target = _seekTarget ?? Duration.zero;
+    if (actualPos > target + const Duration(milliseconds: 700)) {
+      // Sound is flowing from the rebuilt stream.
+      _seekDeadline = null;
+      _seekTarget = null;
+      return;
+    }
+    if (DateTime.now().isBefore(deadline)) return;
+    _seekDeadline = null;
+    _seekTarget = null;
+    if (!isPlaying.value) return;
+    final track = currentTrack.value;
+    if (track != null) unawaited(_fallBackFromStream(track, startAt: target));
   }
 
   /// Mirrors the engine's decoded-buffer window into the progress readout, and

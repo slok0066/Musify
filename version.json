@@ -1,8 +1,8 @@
 {
-  "version": "1.0.8",
-  "build": 9,
-  "release_notes": "• Instant progressive stream seek (<150ms) with zero download delay\n• Snappy, responsive scrubber with proactive range fetching and accurate playhead tracking\n• Fixed seekbar drag lock release timing\n• First-install-only Credit screen persistence\n• Bigger, taller cinematic featured song poster cards on Home screen",
-  "download_url": "https://github.com/slok0066/Musify/releases/download/v1.0.8/app-arm64-v8a-release.apk",
-  "apk_url": "https://github.com/slok0066/Musify/releases/download/v1.0.8/app-arm64-v8a-release.apk",
+  "version": "1.0.9",
+  "build": 10,
+  "release_notes": "• Scrubber: instant, safe seeking — a failed stream seek now falls back automatically to the download route at exactly the position you picked\n• Seeking no longer risks silence: the old voice keeps playing until the new one is live\n• Update prompt: tapping LATER no longer re-opens on every return to the app\n• The analyser (FFT / wave) is back on the Now Playing screen with your saved mode\n• Credit & welcome page appears only on a first install\n• Bigger featured-hit poster cards on Home",
+  "download_url": "https://github.com/slok0066/Musify/releases/download/v1.0.9/app-arm64-v8a-release.apk",
+  "apk_url": "https://github.com/slok0066/Musify/releases/download/v1.0.9/app-arm64-v8a-release.apk",
   "mandatory": false
 }

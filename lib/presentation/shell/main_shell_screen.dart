@@ -114,7 +114,9 @@ class _ChassisState extends State<_Chassis> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      locator<UpdateService>().resetDismissed();
+      // A `LATER` answer lasts for the whole session: an update that appeared
+      // while the app was backgrounded still raises the dialog, but one the
+      // user already waved off never nags again until the next cold start.
       _checkUpdateSilently();
     }
   }

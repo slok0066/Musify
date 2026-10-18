@@ -143,10 +143,6 @@ class UpdateService {
     _dismissedThisSession = true;
   }
 
-  void resetDismissed() {
-    _dismissedThisSession = false;
-  }
-
   /// Displays the clean, minimal in-app update popup dialog.
   static Future<void> showUpdateDialog(
     BuildContext context,

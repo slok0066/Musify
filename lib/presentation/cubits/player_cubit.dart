@@ -108,6 +108,7 @@ class PlayerState extends Equatable {
     bool? liked,
     bool? downloaded,
     double? downloadProgress,
+    bool clearDownloadProgress = false,
     bool? headphones,
   }) {
     return PlayerState(
@@ -129,8 +130,9 @@ class PlayerState extends Equatable {
       queueIndex: queueIndex ?? this.queueIndex,
       liked: liked ?? this.liked,
       downloaded: downloaded ?? this.downloaded,
-      downloadProgress:
-          clearBufferFraction ? null : (downloadProgress ?? this.downloadProgress),
+      downloadProgress: clearDownloadProgress
+          ? null
+          : (downloadProgress ?? this.downloadProgress),
       headphones: headphones ?? this.headphones,
     );
   }

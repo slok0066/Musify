@@ -315,6 +315,12 @@ class _TactileSeekBarState extends State<TactileSeekBar> {
   double? _dragMilliseconds;
   Timer? _seekDebounceTimer;
 
+  /// True between `onChangeEnd` and the moment the engine's position has
+  /// caught up with the seek. The early release below only runs then: while a
+  /// finger is still on the bar a position tick must never yank the thumb
+  /// back to the live playhead.
+  bool _seekIssued = false;
+
   Duration get _displayed {
     if (_dragMilliseconds != null) {
       return Duration(milliseconds: _dragMilliseconds!.round());
@@ -325,13 +331,14 @@ class _TactileSeekBarState extends State<TactileSeekBar> {
   @override
   void didUpdateWidget(TactileSeekBar oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (_dragMilliseconds != null) {
-      final diff = (widget.position.inMilliseconds - _dragMilliseconds!).abs();
-      // If position has synced within 400ms of seeked target, release drag lock early
-      if (diff < 400) {
-        _seekDebounceTimer?.cancel();
-        _dragMilliseconds = null;
-      }
+    if (_dragMilliseconds == null || !_seekIssued) return;
+    final diff = (widget.position.inMilliseconds - _dragMilliseconds!).abs();
+    // The engine has caught up with the seeked target: release the lock.
+    // A seek that never lands keeps the lock, and the 350 ms debounce set in
+    // `onChangeEnd` returns the thumb to the real playhead.
+    if (diff < 400) {
+      _seekDebounceTimer?.cancel();
+      _dragMilliseconds = null;
     }
   }
 
@@ -407,6 +414,7 @@ class _TactileSeekBarState extends State<TactileSeekBar> {
                   onChangeStart: canSeek
                       ? (val) {
                           _seekDebounceTimer?.cancel();
+                          _seekIssued = false;
                           setState(() => _dragMilliseconds = val);
                           Haptics.tap();
                         }
@@ -414,18 +422,23 @@ class _TactileSeekBarState extends State<TactileSeekBar> {
                   onChanged: canSeek
                       ? (val) {
                           _seekDebounceTimer?.cancel();
+                          _seekIssued = false;
                           setState(() => _dragMilliseconds = val);
                         }
                       : null,
                   onChangeEnd: canSeek
                       ? (val) {
+                          _seekIssued = true;
                           setState(() => _dragMilliseconds = val);
                           widget.onSeek(Duration(milliseconds: val.round()));
                           Haptics.commit();
                           _seekDebounceTimer?.cancel();
                           _seekDebounceTimer = Timer(const Duration(milliseconds: 350), () {
                             if (mounted) {
-                              setState(() => _dragMilliseconds = null);
+                              setState(() {
+                                _seekIssued = false;
+                                _dragMilliseconds = null;
+                              });
                             }
                           });
                         }

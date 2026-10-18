@@ -837,7 +837,7 @@ class _QuickSongRailState extends State<_QuickSongRail> {
         : 0;
 
     _pageController = PageController(
-      viewportFraction: 0.74,
+      viewportFraction: 0.78,
       initialPage: initialPage,
     );
     _activePage = initialPage;
@@ -923,7 +923,7 @@ class _QuickSongRailState extends State<_QuickSongRail> {
 
           // Auto-sliding Taller Poster Carousel
           SizedBox(
-            height: 368,
+            height: 404,
             child: NotificationListener<ScrollNotification>(
               onNotification: (notification) {
                 if (notification is ScrollStartNotification) {

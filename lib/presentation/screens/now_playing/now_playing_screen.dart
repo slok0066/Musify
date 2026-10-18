@@ -9,8 +9,10 @@ import '../../../core/utils/formatters.dart';
 import '../../../services/settings_service.dart';
 import '../../cubits/library_cubit.dart';
 import '../../cubits/player_cubit.dart';
+import '../../cubits/settings_cubit.dart';
 import '../../widgets/artwork_color.dart';
 import '../../widgets/eight_d_calibration_sheet.dart';
+import '../../widgets/fft_visualizer.dart';
 import '../../widgets/swiss_artwork.dart';
 import '../../widgets/tactile_slider.dart';
 import '../../widgets/track_options_sheet.dart';
@@ -377,6 +379,16 @@ class _Face extends StatelessWidget {
                           onPressed: player.cycleRepeat,
                         ),
                       ],
+                    ),
+                  ),
+
+                  // ---------------------------------------------------- analyser
+                  BlocSelector<SettingsCubit, SettingsState, VisualizerMode>(
+                    selector: (settings) => settings.settings.visualizer,
+                    builder: (context, mode) => Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                          SwissGrid.gutter, SwissGrid.md, SwissGrid.gutter, 0),
+                      child: FftVisualizer(mode: mode, height: 64, barCount: 40),
                     ),
                   ),
                   const Spacer(),
