@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -80,17 +81,31 @@ class UpdateService {
     if (_dismissedThisSession && !force) return null;
 
     try {
-      final response = await _dio.get<Map<String, dynamic>>(
+      final response = await _dio.get<dynamic>(
         updateEndpoint,
         options: Options(
-          responseType: ResponseType.json,
+          responseType: ResponseType.plain,
           receiveTimeout: const Duration(seconds: 8),
           sendTimeout: const Duration(seconds: 8),
         ),
       );
 
-      final data = response.data;
-      if (data == null) return null;
+      final dynamic raw = response.data;
+      if (raw == null) return null;
+
+      final Map<String, dynamic> data;
+      if (raw is Map<String, dynamic>) {
+        data = raw;
+      } else if (raw is String) {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map<String, dynamic>) {
+          data = decoded;
+        } else {
+          return null;
+        }
+      } else {
+        return null;
+      }
 
       final info = AppUpdateInfo.fromJson(data);
       if (info.hasUpdate || force) {
