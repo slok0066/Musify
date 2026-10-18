@@ -1,8 +1,8 @@
 {
-  "version": "1.0.7",
-  "build": 8,
-  "release_notes": "• Bigger, taller cinematic featured song poster cards on Home screen\n• First-install-only Credit screen (never repeatedly displayed on reopen)\n• Real-time, responsive song slider (scrubber) seeking in Player\n• Cleaned up Credit screen typography\n• In-app seamless direct APK download and auto-installer",
-  "download_url": "https://github.com/slok0066/Musify/releases/download/v1.0.7/app-arm64-v8a-release.apk",
-  "apk_url": "https://github.com/slok0066/Musify/releases/download/v1.0.7/app-arm64-v8a-release.apk",
+  "version": "1.0.8",
+  "build": 9,
+  "release_notes": "• Instant progressive stream seek (<150ms) with zero download delay\n• Snappy, responsive scrubber with proactive range fetching and accurate playhead tracking\n• Fixed seekbar drag lock release timing\n• First-install-only Credit screen persistence\n• Bigger, taller cinematic featured song poster cards on Home screen",
+  "download_url": "https://github.com/slok0066/Musify/releases/download/v1.0.8/app-arm64-v8a-release.apk",
+  "apk_url": "https://github.com/slok0066/Musify/releases/download/v1.0.8/app-arm64-v8a-release.apk",
   "mandatory": false
 }

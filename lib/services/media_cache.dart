@@ -1107,6 +1107,11 @@ class StreamSession {
   /// Why a live transfer stopped, when it stopped badly.
   String? get error => _transfer?.error;
 
+  /// Proactively repositions the underlying transfer to [offset] on seek.
+  void jumpTo(int offset) {
+    _transfer?.jumpTo(offset);
+  }
+
   /// The whole file this session reads from, or `null` while it is still
   /// arriving (a half-written `.part` is not a path the engine can be given).
   String? get path {
@@ -1206,9 +1211,9 @@ class _LiveTransfer {
   bool _finalized = false;
   String? _error;
 
-  /// A read more than this far ahead of the connection restarts it there: half
-  /// a megabyte of reconnect beats half a megabyte of waiting.
-  static const int _jumpBytes = 1 << 19;
+  /// A read more than this far ahead of the connection restarts it there:
+  /// reconnecting beats waiting for sequential bytes to download.
+  static const int _jumpBytes = 64 * 1024;
 
   /// How long [readRange] waits before giving up on a range.
   static const Duration _readTimeout = Duration(seconds: 25);
@@ -1237,6 +1242,17 @@ class _LiveTransfer {
     cache._registerFinisher(this);
   }
 
+  /// Proactively reposition the connection to [offset] on seek so reads are instant.
+  void jumpTo(int offset) {
+    if (complete || _stopped || failed) return;
+    if (_covers(offset, offset + 1)) return;
+    _restartAt = offset;
+    final token = _token;
+    if (token != null && !token.isCancelled) {
+      token.cancel('reposition');
+    }
+  }
+
   // ---------------------------------------------------------------- reading
 
   /// Waits for `[start, end)` to be on disk, then reads it.
@@ -1252,7 +1268,7 @@ class _LiveTransfer {
       if (_stopped || failed) return null;
       if (!DateTime.now().isBefore(deadline)) return null;
       _maybeJump(from);
-      await Future<void>.delayed(const Duration(milliseconds: 40));
+      await Future<void>.delayed(const Duration(milliseconds: 20));
     }
     return _readFromDisk(from, to);
   }
@@ -1284,7 +1300,7 @@ class _LiveTransfer {
     if (complete || _stopped || failed) return;
     if (_covers(start, start + 1)) return;
     if (_cursor <= start && start <= _cursor + _jumpBytes) return;
-    if (_restartAt != null && _restartAt! <= start) return;
+    if (_restartAt != null && _restartAt! <= start && start <= _restartAt! + _jumpBytes) return;
     _restartAt = start;
     final token = _token;
     if (token != null && !token.isCancelled) token.cancel('reposition');

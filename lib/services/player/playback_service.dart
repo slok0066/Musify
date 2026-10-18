@@ -161,6 +161,8 @@ class PlaybackService {
 
   /// True while [_source] is a pull-buffer stream rather than a loaded file.
   bool _streaming = false;
+  int _streamByteOffset = 0;
+  Duration _streamTimeOffset = Duration.zero;
 
   /// The engine has produced sound from the stream (so a feed failure should be
   /// reported rather than answered with a restart).
@@ -425,38 +427,34 @@ class PlaybackService {
     if (total > Duration.zero && clamped > total) clamped = total;
     if (clamped < Duration.zero) clamped = Duration.zero;
 
-    _seekSuppressedUntil = DateTime.now().add(const Duration(milliseconds: 750));
+    _seekSuppressedUntil = DateTime.now().add(const Duration(milliseconds: 300));
     position.value = clamped;
     _bump();
 
     final track = currentTrack.value;
-    if (_streaming && track != null) {
-      // Progressive pull buffer streams cannot seek natively in SoLoud.
-      // Transition immediately to the complete cached disk file.
-      var path = _streamSession?.path ?? _completedPath?.call(track);
-      if (path == null) {
-        final session = _streamSession;
-        if (session != null) {
-          final deadline = DateTime.now().add(const Duration(milliseconds: 1000));
-          while (!session.isComplete && DateTime.now().isBefore(deadline)) {
-            await Future<void>.delayed(const Duration(milliseconds: 40));
-          }
-          path = session.path;
-        }
-      }
-      if (path == null) {
-        final resolved = await _resolveFor(track);
-        if (resolved != null && resolved.isLocalFile) {
-          path = resolved.path;
-        }
-      }
+    if (track == null) return;
 
-      if (path != null && path.isNotEmpty) {
-        await _switchToLocalFile(path, seekTo: clamped);
-        return;
+    // 1. If we already have the complete file locally (cached or downloaded), seek natively in disk file
+    final localPath = _streamSession?.path ?? _completedPath?.call(track);
+    if (localPath != null && localPath.isNotEmpty) {
+      if (_streaming) {
+        await _switchToLocalFile(localPath, seekTo: clamped);
+      } else {
+        final handle = _handle;
+        if (_live(handle)) {
+          _soloud.seek(handle!, clamped);
+        }
       }
+      return;
     }
 
+    // 2. If we are streaming and the full file is still arriving, INSTANTLY seek the stream (<150ms)
+    if (_streaming) {
+      await _seekProgressiveStream(clamped);
+      return;
+    }
+
+    // 3. Fallback for loaded disk files
     final handle = _handle;
     if (_live(handle)) {
       try {
@@ -470,6 +468,102 @@ class PlaybackService {
       } catch (e) {
         debugPrint('seek failed: $e');
       }
+    }
+  }
+
+  /// Instantly reposition the progressive audio stream to [target] without
+  /// downloading the whole file first.
+  Future<void> _seekProgressiveStream(Duration target) async {
+    final session = _streamSession;
+    final index = _streamIndex;
+    if (session == null) return;
+
+    int startByteOffset;
+    Duration actualStartTime;
+    int remainingAudioBytes;
+
+    if (index != null) {
+      startByteOffset = index.adtsOffsetAtTime(target);
+      actualStartTime = index.timeAtAdtsOffset(startByteOffset);
+      remainingAudioBytes = (index.totalAdtsBytes - startByteOffset).clamp(1024, index.totalAdtsBytes);
+    } else {
+      final total = session.total ?? 1;
+      final totalMs = duration.value.inMilliseconds <= 0 ? 1 : duration.value.inMilliseconds;
+      final fraction = (target.inMilliseconds / totalMs).clamp(0.0, 1.0);
+      startByteOffset = (total * fraction).round();
+      actualStartTime = target;
+      remainingAudioBytes = (total - startByteOffset).clamp(1024, total);
+    }
+
+    _streamByteOffset = startByteOffset;
+    _streamTimeOffset = actualStartTime;
+    _feedsInFlight.clear();
+
+    // Proactively jump the network connection to target frame so read() returns immediately
+    if (index != null) {
+      final window = index.windowAt(startByteOffset, _feedWindowBytes);
+      session.jumpTo(window.fileStart);
+    } else {
+      session.jumpTo(startByteOffset);
+    }
+
+    _streamWatchdog?.cancel();
+    _streamWatchdog = null;
+    final wasPlaying = isPlaying.value;
+
+    final oldHandle = _handle;
+    final oldSource = _source;
+    await _finishSub?.cancel();
+
+    try {
+      final source = _soloud.setPullBufferStream(
+        audioSizeBytes: remainingAudioBytes,
+        format: BufferType.auto,
+        bufferSizeBytes: 4 * 1024 * 1024,
+        bufferTriggerPosition: 0.75,
+        sampleRate: index?.sampleRate ?? 44100,
+        channels: (index?.channels ?? 2) == 1 ? Channels.mono : Channels.stereo,
+        onMoreDataIsNeeded: (offset) => unawaited(_feedStream(offset)),
+        onBuffering: (buffering, handle, time) {
+          if (_disposed || !_streaming) return;
+          isBuffering.value = buffering;
+          if (!buffering) _streamStarted = true;
+          _bump();
+        },
+        onAudioDuration: (seconds) {},
+      );
+
+      _source = source;
+      final handle = _soloud.play3d(source, 0, 0, 1, volume: 1);
+      _handle = handle;
+
+      if (_live(handle)) {
+        _soloud.set3dSourceMinMaxDistance(handle, 1, 8);
+        _soloud.set3dSourceAttenuation(handle, 1, 1);
+        if (is8DEnabled.value) _apply8DToActiveVoice();
+        if (!wasPlaying) {
+          _soloud.setPause(handle, true);
+        }
+        _finishSub = source.allInstancesFinished.listen((_) => _notifyEnd());
+      }
+
+      // Stop previous stream voice
+      if (_live(oldHandle)) {
+        try {
+          _soloud.stop(oldHandle!);
+        } catch (_) {}
+      }
+      if (oldSource != null) {
+        try {
+          unawaited(_soloud.disposeSource(oldSource));
+        } catch (_) {}
+      }
+
+      position.value = actualStartTime;
+      _seekSuppressedUntil = DateTime.now().add(const Duration(milliseconds: 300));
+      _bump();
+    } catch (e) {
+      debugPrint('_seekProgressiveStream failed: $e');
     }
   }
 
@@ -490,6 +584,8 @@ class PlaybackService {
       _streamSession = null;
       _streamIndex = null;
       _streaming = false;
+      _streamByteOffset = 0;
+      _streamTimeOffset = Duration.zero;
       _streamWatchdog?.cancel();
       _streamWatchdog = null;
 
@@ -532,7 +628,7 @@ class PlaybackService {
       }
       oldSession?.release();
 
-      _seekSuppressedUntil = DateTime.now().add(const Duration(milliseconds: 600));
+      _seekSuppressedUntil = DateTime.now().add(const Duration(milliseconds: 300));
       _bump();
     } catch (e) {
       debugPrint('_switchToLocalFile failed: $e');
@@ -682,6 +778,8 @@ class PlaybackService {
     // From here on the progressive path owns the voice.
     _streamSession = session;
     _streamIndex = index;
+    _streamByteOffset = 0;
+    _streamTimeOffset = Duration.zero;
     _streamStumbles = 0;
     _streamStarted = false;
     _feedsInFlight.clear();
@@ -796,64 +894,69 @@ class PlaybackService {
     if (session == null || source == null) return;
     final total = session.total;
     if (total == null || offset < 0) return;
-    if (offset >= total) {
+    final fileOffset = _streamByteOffset + offset;
+    if (fileOffset >= total) {
       // The engine has read everything there is — say so, so the queue can
       // advance instead of waiting for bytes that do not exist.
       _reportStreamProgress(session);
       return;
     }
-    if (!_feedsInFlight.add(offset)) return;
+    if (!_feedsInFlight.add(fileOffset)) return;
 
     try {
-      final end = math.min(offset + _feedWindowBytes, total);
-      final bytes = await session.read(offset, end);
+      final end = math.min(fileOffset + _feedWindowBytes, total);
+      final bytes = await session.read(fileOffset, end);
       if (_disposed || !_streaming) return;
       if (bytes == null || bytes.isEmpty) {
-        _onFeedFailed(offset, 'no bytes');
+        _onFeedFailed(fileOffset, 'no bytes');
         return;
       }
       _soloud.addPullBufferDataStream(source, bytes, offset: offset);
       _streamStumbles = 0;
       _reportStreamProgress(session);
     } catch (e) {
-      _onFeedFailed(offset, '$e');
+      _onFeedFailed(fileOffset, '$e');
     } finally {
-      _feedsInFlight.remove(offset);
+      _feedsInFlight.remove(fileOffset);
     }
   }
 
-  /// Feeds the engine the frames that begin at [adtsOffset].
-  Future<void> _feedFrames(int adtsOffset) async {
+  /// Feeds the engine the frames that begin at [offset].
+  Future<void> _feedFrames(int offset) async {
     final session = _streamSession;
     final index = _streamIndex;
     final source = _source;
     if (!_streaming || _disposed) return;
     if (session == null || index == null || source == null) return;
-    if (adtsOffset < 0 || adtsOffset >= index.totalAdtsBytes) return;
-    if (!_feedsInFlight.add(adtsOffset)) return;
+    final targetAdtsOffset = _streamByteOffset + offset;
+    if (targetAdtsOffset < 0 || targetAdtsOffset >= index.totalAdtsBytes) return;
+    if (!_feedsInFlight.add(targetAdtsOffset)) return;
 
     try {
-      final window = index.windowAt(adtsOffset, _feedWindowBytes);
+      final window = index.windowAt(targetAdtsOffset, _feedWindowBytes);
       final bytes = await session.read(window.fileStart, window.fileEnd);
       // The voice may have been torn down while this read was in flight; a
       // `null` then means "the session was released", not "the stream broke".
       if (_disposed || !_streaming) return;
       if (bytes == null) {
-        _onFeedFailed(adtsOffset, 'no bytes');
+        _onFeedFailed(targetAdtsOffset, 'no bytes');
         return;
       }
       final adts = index.assemble(window, bytes);
       if (adts.isEmpty) {
-        _onFeedFailed(adtsOffset, 'empty window');
+        _onFeedFailed(targetAdtsOffset, 'empty window');
         return;
       }
-      _soloud.addPullBufferDataStream(source, adts, offset: window.adtsOffset);
+      final bufferOffset = window.adtsOffset - _streamByteOffset;
+      if (bufferOffset >= 0) {
+        _soloud.addPullBufferDataStream(source, adts, offset: bufferOffset);
+      }
       _streamStumbles = 0;
       _reportStreamProgress(session);
     } catch (e) {
-      _onFeedFailed(adtsOffset, '$e');
+      _onFeedFailed(targetAdtsOffset, '$e');
     } finally {
-      _feedsInFlight.remove(adtsOffset);
+      _feedsInFlight.remove(targetAdtsOffset);
     }
   }
 
@@ -1114,6 +1217,8 @@ class PlaybackService {
     _streaming = false;
     _streamStarted = false;
     _streamIndex = null;
+    _streamByteOffset = 0;
+    _streamTimeOffset = Duration.zero;
     _streamStumbles = 0;
     _feedsInFlight.clear();
     final session = _streamSession;
@@ -1164,7 +1269,8 @@ class PlaybackService {
       if (!_live(handle)) return;
       try {
         final current = _soloud.getPosition(handle!);
-        position.value = current;
+        final actualPos = _streaming ? (_streamTimeOffset + current) : current;
+        position.value = actualPos;
         final playing = !_soloud.getPause(handle);
         if (playing != isPlaying.value) {
           isPlaying.value = playing;
@@ -1182,7 +1288,7 @@ class PlaybackService {
           _bump();
         }
         if (_streaming) _pollStreamBuffer();
-        _maybeCrossfade(current);
+        _maybeCrossfade(actualPos);
       } catch (e) {
         debugPrint('position poll failed: $e');
       }
@@ -1205,10 +1311,10 @@ class PlaybackService {
         }
       }
       final range = _soloud.getPullBufferTimeRange(source);
-      buffered.value = range.endTime;
+      buffered.value = _streaming ? (_streamTimeOffset + range.endTime) : range.endTime;
       if (total > Duration.zero) {
         bufferFraction.value =
-            (range.endTime.inMilliseconds / total.inMilliseconds)
+            (buffered.value.inMilliseconds / total.inMilliseconds)
                 .clamp(0.0, 1.0);
       }
     } catch (e) {

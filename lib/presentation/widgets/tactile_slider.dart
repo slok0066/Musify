@@ -423,7 +423,7 @@ class _TactileSeekBarState extends State<TactileSeekBar> {
                           widget.onSeek(Duration(milliseconds: val.round()));
                           Haptics.commit();
                           _seekDebounceTimer?.cancel();
-                          _seekDebounceTimer = Timer(const Duration(milliseconds: 750), () {
+                          _seekDebounceTimer = Timer(const Duration(milliseconds: 350), () {
                             if (mounted) {
                               setState(() => _dragMilliseconds = null);
                             }

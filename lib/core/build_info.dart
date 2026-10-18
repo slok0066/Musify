@@ -8,8 +8,8 @@
 ///
 /// Bump [kAppVersion]/[kAppBuild] whenever the version in `pubspec.yaml` moves,
 /// and refresh [kBuildStamp]/[kBuildTag] whenever a release APK is produced.
-const String kAppVersion = '1.0.7';
-const int kAppBuild = 8;
+const String kAppVersion = '1.0.8';
+const int kAppBuild = 9;
 
 /// Date (local) the release APK was produced.
 const String kBuildStamp = '2026-10-18';

@@ -296,6 +296,28 @@ class Mp4AacIndex {
     return lo;
   }
 
+  /// The frame index for a given playback [time].
+  int sampleAtTime(Duration time) {
+    if (time <= Duration.zero) return 0;
+    if (time >= duration) return sampleCount - 1;
+    final seconds = time.inMicroseconds / 1000000.0;
+    final frame = ((seconds * sampleRate) / samplesPerFrame).floor();
+    return frame.clamp(0, sampleCount - 1);
+  }
+
+  /// The byte offset in the ADTS stream where the frame for [time] begins.
+  int adtsOffsetAtTime(Duration time) {
+    final frame = sampleAtTime(time);
+    return _adtsStarts[frame];
+  }
+
+  /// The exact timestamp of the frame that contains ADTS byte [adtsOffset].
+  Duration timeAtAdtsOffset(int adtsOffset) {
+    final frame = sampleAt(adtsOffset);
+    final micros = ((frame * samplesPerFrame * 1000000) / sampleRate).round();
+    return Duration(microseconds: micros);
+  }
+
   /// A read window covering at least [maxBytes] of ADTS stream from
   /// [adtsOffset], aligned to frame boundaries.
   ///
