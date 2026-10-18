@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -15,7 +17,6 @@ import '../../navigation.dart';
 import '../../widgets/collection_cards.dart';
 import '../../widgets/screen_header.dart';
 import '../../widgets/state_placeholders.dart';
-import '../../widgets/swiss_artwork.dart';
 import '../../widgets/track_list_tile.dart';
 import '../../widgets/track_options_sheet.dart';
 
@@ -557,28 +558,28 @@ class _SpatialBlurb extends StatelessWidget {
   }
 }
 
-/// A sleek rectangular song card that slides horizontally.
+/// A wide landscape rectangular card showing the full song poster artwork.
 class SongRectangleCard extends StatelessWidget {
   const SongRectangleCard({
     required this.track,
     required this.onTap,
     this.onOptions,
-    this.width = 250,
+    this.width,
     super.key,
   });
 
   final Track track;
   final VoidCallback onTap;
   final VoidCallback? onOptions;
-  final double width;
+  final double? width;
 
   @override
   Widget build(BuildContext context) {
     final t = SwissTokens.of(context);
 
-    return SizedBox(
+    return Container(
       width: width,
-      height: 68,
+      margin: const EdgeInsets.symmetric(horizontal: 5, vertical: 4),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () {
@@ -590,74 +591,173 @@ class SongRectangleCard extends StatelessWidget {
           onOptions?.call();
         },
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           decoration: BoxDecoration(
-            color: t.surfaceRaised,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: t.hairline, width: 1),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: t.hairline, width: 1.2),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.08),
-                blurRadius: 6,
-                offset: const Offset(0, 2),
+                color: Colors.black.withValues(alpha: 0.25),
+                blurRadius: 12,
+                offset: const Offset(0, 5),
               ),
             ],
           ),
-          child: Row(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: SwissArtwork(
-                  imageUrl: track.imageUrl,
-                  size: 52,
-                  radius: 10,
-                  placeholderIcon: Icons.music_note,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      track.title,
-                      style: SwissType.bodySm.copyWith(
-                        color: t.ink,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(19),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                // Full Poster Artwork covering the wide rectangle
+                track.imageUrl.isEmpty
+                    ? Container(
+                        color: t.surfaceSunken,
+                        child: Center(
+                          child: Icon(Icons.music_note, color: t.inkFaint, size: 40),
+                        ),
+                      )
+                    : CachedNetworkImage(
+                        imageUrl: track.imageUrl,
+                        fit: BoxFit.cover,
+                        fadeInDuration: const Duration(milliseconds: 180),
+                        placeholder: (context, _) => Container(
+                          color: t.surfaceSunken,
+                          child: Center(
+                            child: Icon(Icons.music_note, color: t.inkFaint, size: 40),
+                          ),
+                        ),
+                        errorWidget: (context, _, __) => Container(
+                          color: t.surfaceSunken,
+                          child: Center(
+                            child: Icon(Icons.music_note, color: t.inkFaint, size: 40),
+                          ),
+                        ),
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+
+                // Ambient Gradient Overlay for depth and text legibility
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      stops: const [0.35, 0.7, 1.0],
+                      colors: [
+                        Colors.transparent,
+                        Colors.black.withValues(alpha: 0.25),
+                        Colors.black.withValues(alpha: 0.78),
+                      ],
                     ),
-                    const SizedBox(height: 3),
-                    Text(
-                      track.displayArtist,
-                      style: SwissType.micro.copyWith(
-                        color: t.inkMuted,
-                        fontSize: 10.5,
+                  ),
+                ),
+
+                // Top Badge: Trending Hit Indicator
+                Positioned(
+                  top: 10,
+                  left: 12,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.55),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.15),
+                        width: 0.8,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                     ),
-                  ],
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.local_fire_department_rounded, size: 12, color: t.accent),
+                        const SizedBox(width: 4),
+                        Text(
+                          'FEATURED',
+                          style: SwissType.micro.copyWith(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                width: 30,
-                height: 30,
-                decoration: BoxDecoration(
-                  color: t.surfaceSunken,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: t.hairline, width: 0.8),
+
+                // Bottom Strip: Song Title, Artist and Play Pill
+                Positioned(
+                  left: 14,
+                  right: 14,
+                  bottom: 12,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              track.title,
+                              style: SwissType.bodySm.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13.5,
+                                shadows: [
+                                  Shadow(
+                                    color: Colors.black.withValues(alpha: 0.9),
+                                    blurRadius: 4,
+                                  ),
+                                ],
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              track.displayArtist,
+                              style: SwissType.micro.copyWith(
+                                color: Colors.white.withValues(alpha: 0.82),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                                shadows: [
+                                  Shadow(
+                                    color: Colors.black.withValues(alpha: 0.9),
+                                    blurRadius: 4,
+                                  ),
+                                ],
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: t.accent,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: t.accent.withValues(alpha: 0.45),
+                              blurRadius: 10,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: Center(
+                          child: Icon(
+                            Icons.play_arrow_rounded,
+                            size: 22,
+                            color: t.accentInk,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                child: Center(
-                  child: Icon(Icons.play_arrow_rounded, size: 18, color: t.accent),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -665,85 +765,234 @@ class SongRectangleCard extends StatelessWidget {
   }
 }
 
-/// Horizontal sliding rail of rectangular song cards.
-class _QuickSongRail extends StatelessWidget {
+/// Auto-sliding wide poster banner carousel showing latest famous songs.
+class _QuickSongRail extends StatefulWidget {
   const _QuickSongRail({required this.state});
 
   final HomeState state;
 
   @override
+  State<_QuickSongRail> createState() => _QuickSongRailState();
+}
+
+class _QuickSongRailState extends State<_QuickSongRail> {
+  static const int _virtualItemCount = 10000;
+  static const Duration _autoSlideDuration = Duration(milliseconds: 3800);
+
+  late final PageController _pageController;
+  Timer? _timer;
+  int _activePage = 0;
+  bool _isUserScrolling = false;
+
+  List<Track> _extractFamousSongs() {
+    final songs = <Track>[];
+    final seen = <String>{};
+
+    void add(Track? t) {
+      if (t == null) return;
+      if (t.imageUrl.trim().isEmpty) return;
+      if (seen.add(t.dedupeKey)) songs.add(t);
+    }
+
+    // 1. Latest trending catalogue items (viral & hottest songs)
+    for (final item in widget.state.trending) {
+      if (item.isTrack) add(item.track);
+    }
+    // 2. Charts items (top country/global charts)
+    for (final item in widget.state.charts) {
+      if (item.isTrack) add(item.track);
+    }
+    // 3. Top searches
+    for (final t in widget.state.topSearches) {
+      add(t);
+    }
+    // 4. Continue listening / cached tracks as graceful offline fallback
+    for (final t in widget.state.continueListening) {
+      add(t);
+    }
+    for (final t in widget.state.cachedTracks) {
+      add(t);
+    }
+
+    return songs.take(15).toList();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    final songs = _extractFamousSongs();
+    final initialPage = songs.isNotEmpty
+        ? (_virtualItemCount ~/ 2) - ((_virtualItemCount ~/ 2) % songs.length)
+        : 0;
+
+    _pageController = PageController(
+      viewportFraction: 0.88,
+      initialPage: initialPage,
+    );
+    _activePage = initialPage;
+    _startTimer();
+  }
+
+  void _startTimer() {
+    _timer?.cancel();
+    _timer = Timer.periodic(_autoSlideDuration, (_) {
+      if (!mounted || _isUserScrolling || !_pageController.hasClients) return;
+      final songs = _extractFamousSongs();
+      if (songs.length <= 1) return;
+
+      final nextPage = (_pageController.page?.round() ?? _activePage) + 1;
+      _pageController.animateToPage(
+        nextPage,
+        duration: const Duration(milliseconds: 650),
+        curve: Curves.easeInOutCubic,
+      );
+    });
+  }
+
+  void _pauseTimer() {
+    _timer?.cancel();
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final t = SwissTokens.of(context);
+    final songs = _extractFamousSongs();
+
+    if (songs.isEmpty) return const SizedBox.shrink();
+
     final player = context.read<PlayerCubit>();
-    final candidateTracks = state.continueListening.isNotEmpty
-        ? state.continueListening
-        : (state.topSearches.isNotEmpty
-            ? state.topSearches
-            : state.trending
-                .where((item) => item.isTrack)
-                .map((item) => item.track!)
-                .toList());
-
-    if (candidateTracks.isEmpty) return const SizedBox.shrink();
-
-    final songs = candidateTracks.take(16).toList();
+    final displayIndex = _activePage % songs.length;
+    final dotCount = songs.length.clamp(1, 8);
 
     return Padding(
-      padding: const EdgeInsets.only(top: SwissGrid.md, bottom: SwissGrid.xs),
+      padding: const EdgeInsets.only(top: SwissGrid.md, bottom: SwissGrid.sm),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Section Header
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: SwissGrid.gutter),
             child: Row(
               children: [
-                Text(
-                  'QUICK PICKS',
-                  style: SwissType.label.copyWith(
-                    color: SwissTokens.of(context).ink,
-                    letterSpacing: 1.2,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                  ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    LedDot(active: true, size: 6),
+                    const SizedBox(width: 8),
+                    Text(
+                      'FEATURED HITS',
+                      style: SwissType.label.copyWith(
+                        color: t.ink,
+                        letterSpacing: 1.2,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
                 ),
                 const Spacer(),
-                Text(
-                  'SLIDE FOR MORE',
-                  style: SwissType.micro.copyWith(
-                    color: SwissTokens.of(context).accent,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.5,
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: t.surfaceSunken,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: t.hairline, width: 0.8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.auto_awesome_rounded, size: 11, color: t.accent),
+                      const SizedBox(width: 4),
+                      Text(
+                        'AUTO-SLIDING',
+                        style: SwissType.micro.copyWith(
+                          color: t.accent,
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.6,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
           ),
           const SizedBox(height: SwissGrid.sm),
+
+          // Auto-sliding Wide Poster Carousel
           SizedBox(
-            height: 72,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: SwissGrid.gutter),
-              itemCount: songs.length,
-              separatorBuilder: (_, __) => const SizedBox(width: SwissGrid.sm),
-              itemBuilder: (context, i) {
-                final track = songs[i];
-                return SongRectangleCard(
-                  track: track,
-                  onTap: () => player.playTrack(
-                    track,
-                    context: songs,
-                    source: 'QUICK PICKS',
-                  ),
-                  onOptions: () => showTrackOptions(
-                    context,
-                    track,
-                    source: 'QUICK PICKS',
-                  ),
-                );
+            height: 172,
+            child: NotificationListener<ScrollNotification>(
+              onNotification: (notification) {
+                if (notification is ScrollStartNotification) {
+                  _isUserScrolling = true;
+                  _pauseTimer();
+                } else if (notification is ScrollEndNotification) {
+                  _isUserScrolling = false;
+                  _startTimer();
+                }
+                return false;
               },
+              child: PageView.builder(
+                controller: _pageController,
+                itemCount: songs.length > 1 ? _virtualItemCount : 1,
+                onPageChanged: (index) {
+                  setState(() {
+                    _activePage = index;
+                  });
+                },
+                itemBuilder: (context, index) {
+                  final track = songs[index % songs.length];
+                  return SongRectangleCard(
+                    track: track,
+                    onTap: () => player.playTrack(
+                      track,
+                      context: songs,
+                      source: 'FEATURED HITS',
+                    ),
+                    onOptions: () => showTrackOptions(
+                      context,
+                      track,
+                      source: 'FEATURED HITS',
+                    ),
+                  );
+                },
+              ),
             ),
           ),
+
+          const SizedBox(height: 10),
+
+          // Sliding Indicator Dots
+          if (songs.length > 1)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                for (int i = 0; i < dotCount; i++) ...[
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOut,
+                    width: (displayIndex % dotCount) == i ? 18 : 6,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: (displayIndex % dotCount) == i
+                          ? t.accent
+                          : t.inkFaint.withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+                  if (i != dotCount - 1) const SizedBox(width: 5),
+                ],
+              ],
+            ),
         ],
       ),
     );

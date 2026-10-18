@@ -21,20 +21,41 @@ class CreditsSheet extends StatelessWidget {
   }
 
   static const String _instaHandle = 'king_togetherness';
-  static const String _instaUrl = 'https://instagram.com/$_instaHandle';
 
   Future<void> _openInstagram(BuildContext context) async {
     HapticFeedback.mediumImpact();
-    final uri = Uri.parse(_instaUrl);
+    // 1. Try native Instagram app first
+    final appUri = Uri.parse('instagram://user?username=$_instaHandle');
     try {
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      }
-    } catch (_) {
-      // Fallback: copy to clipboard
-      if (context.mounted) {
-        _copyHandle(context);
-      }
+      final launched = await launchUrl(
+        appUri,
+        mode: LaunchMode.externalNonBrowserApplication,
+      );
+      if (launched) return;
+    } catch (_) {}
+
+    // 2. Try launching in external browser
+    final webUri = Uri.parse('https://www.instagram.com/$_instaHandle/');
+    try {
+      final launched = await launchUrl(
+        webUri,
+        mode: LaunchMode.externalApplication,
+      );
+      if (launched) return;
+    } catch (_) {}
+
+    // 3. Try standard platform launch
+    try {
+      final launched = await launchUrl(
+        webUri,
+        mode: LaunchMode.platformDefault,
+      );
+      if (launched) return;
+    } catch (_) {}
+
+    // 4. Fallback: copy to clipboard
+    if (context.mounted) {
+      _copyHandle(context);
     }
   }
 
