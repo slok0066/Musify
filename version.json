@@ -1,8 +1,8 @@
 {
-  "version": "1.0.12",
-  "build": 13,
-  "release_notes": "• Scrubbing now fetches the spot you are dragging to while your finger is still on the bar — the seek lands on bytes already on the device instead of opening a connection after you let go, the same trick that makes big players feel instant\n• The decoded audio window is 10 MB (about 30 seconds) instead of 4 MB, so seeks within half a minute are instant, engine-native moves with no network at all\n• A slow-but-alive seek is no longer abandoned: while bytes keep arriving the player waits for them; only a stream that stops delivering falls back to the download route",
-  "download_url": "https://github.com/slok0066/Musify/releases/download/v1.0.12/app-arm64-v8a-release.apk",
-  "apk_url": "https://github.com/slok0066/Musify/releases/download/v1.0.12/app-arm64-v8a-release.apk",
+  "version": "1.0.13",
+  "build": 14,
+  "release_notes": "• Checking for updates is reliable now: the app always asks GitHub for the very latest release, so a new version can no longer hide behind GitHub's five-minute file cache\n• Scrubbing prefetches the spot you are dragging to while your finger is down — the seek lands on bytes already on the device instead of opening a connection after you let go\n• The decoded audio window is 10 MB (about 30 seconds), so seeks within half a minute are instant, engine-native moves with no network at all\n• A slow-but-alive seek waits for its bytes instead of falling back to a full download",
+  "download_url": "https://github.com/slok0066/Musify/releases/download/v1.0.13/app-arm64-v8a-release.apk",
+  "apk_url": "https://github.com/slok0066/Musify/releases/download/v1.0.13/app-arm64-v8a-release.apk",
   "mandatory": false
 }

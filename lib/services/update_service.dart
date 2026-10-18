@@ -97,17 +97,28 @@ class UpdateService {
 
   UpdateService(this._dio);
 
+  /// GitHub's raw CDN keeps a copy of `version.json` for five minutes, so a
+  /// release published moments ago can stay invisible to the very next check.
+  /// Every request carries a unique stamp and `no-cache`, which makes the edge
+  /// hand back what is on the branch right now instead of its cached copy.
+  String _freshEndpoint() {
+    final millis = DateTime.now().millisecondsSinceEpoch;
+    final separator = updateEndpoint.contains('?') ? '&' : '?';
+    return '$updateEndpoint${separator}t=$millis';
+  }
+
   /// Checks for an update without throwing. Returns null if offline or up to date.
   Future<AppUpdateInfo?> checkForUpdate({bool force = false}) async {
     if (_dismissedThisSession && !force) return null;
 
     try {
       final response = await _dio.get<dynamic>(
-        updateEndpoint,
+        _freshEndpoint(),
         options: Options(
           responseType: ResponseType.plain,
           receiveTimeout: const Duration(seconds: 8),
           sendTimeout: const Duration(seconds: 8),
+          headers: const {'Cache-Control': 'no-cache'},
         ),
       );
 
