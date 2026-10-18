@@ -283,6 +283,11 @@ class PlayerCubit extends Cubit<PlayerState> {
 
   Future<void> seek(Duration position) => _player.seek(position);
 
+  /// A drag tick on the scrubber: starts fetching the dragged-to spot while
+  /// the finger is still down, so the actual seek lands on bytes already on
+  /// disk. Harmless outside a live stream.
+  void seekHint(Duration position) => _player.hintSeek(position);
+
   Future<void> playNext(Track track) => _player.playNext(track);
 
   Future<void> addToQueue(Track track) => _player.addToQueue(track);

@@ -252,6 +252,39 @@ void main() {
     expect(sought, isNotNull);
   });
 
+  testWidgets('TactileSeekBar hints the player while the finger drags',
+      (tester) async {
+    Duration? sought;
+    final hints = <Duration>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildMusifyTheme(SwissTokens.carbon),
+        home: Scaffold(
+          body: Padding(
+            padding: const EdgeInsets.all(16),
+            child: TactileSeekBar(
+              position: const Duration(seconds: 30),
+              duration: const Duration(seconds: 120),
+              buffered: 0.5,
+              enabled: true,
+              onSeek: (target) => sought = target,
+              onSeekHint: hints.add,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    // A drag must hint the player on its way — the actual seek only lands on
+    // release, but the bytes it will need are fetched during the gesture.
+    await tester.drag(find.byType(Slider), const Offset(80, 0));
+    await tester.pumpAndSettle();
+
+    expect(hints, isNotEmpty);
+    expect(sought, isNotNull);
+  });
+
   testWidgets('FullCreditScreen renders creator info and calls onDismiss',
       (tester) async {
     var dismissed = false;

@@ -212,6 +212,19 @@ class PlaybackService {
   Duration? _seekTarget;
   DateTime? _seekDeadline;
 
+  /// Transfer coverage seen at the previous watchdog check, and how many times
+  /// a slow-but-alive seek has been given more time. A stream whose bytes are
+  /// still arriving is not a lost cause: forcing the whole-file route on it
+  /// would be slower than letting the rebuilt stream finish.
+  int? _seekProgress;
+  int _seekExtensions = 0;
+
+  /// The newest scrub position already handed to the transfer, and when. While
+  /// the finger is still on the slider those hints are throttled so one drag
+  /// repositions the connection at most a few times.
+  Duration? _hintTarget;
+  DateTime? _hintAt;
+
   /// The current track has already been reported as finished, so a second
   /// signal (finish callback, end-of-buffer detection) cannot advance the queue
   /// twice.
@@ -221,6 +234,12 @@ class PlaybackService {
   /// seconds of 320 kbps AAC: long enough that the engine is never starved,
   /// short enough that a seek is not waiting on a quarter-megabyte read.
   static const int _feedWindowBytes = 192 * 1024;
+
+  /// The engine's decoded circular buffer for a progressive stream. 10 MB of
+  /// stereo float32 is about 30 seconds of audio, so a seek inside that window
+  /// is a native, instant move — the old 4 MB held only ~12 s. This is also
+  /// the plugin's own default, so no engine ever meets a size it dislikes.
+  static const int _streamBufferBytes = 10 * 1024 * 1024;
 
   bool get engineReady => _engineReady;
 
@@ -454,12 +473,67 @@ class PlaybackService {
       if (_streaming && _streamStarted && position.value > Duration.zero) {
         _seekTarget = position.value;
         _seekDeadline = DateTime.now().add(const Duration(seconds: 8));
+        _seekProgress = _streamSession?.bytesAvailable;
+        _seekExtensions = 0;
       }
       _bump();
       return;
     }
     // Nothing loaded (fresh launch) — start whatever the queue holds.
     if (queue.value.isNotEmpty) await _startCurrent();
+  }
+
+  /// A drag tick on the scrubber: starts fetching the bytes around [target]
+  /// while the finger is still down. By the time the finger lifts, the seek's
+  /// first read is served from disk — the connection is no longer opened after
+  /// release, which is what makes a drag feel like it fetches nothing.
+  ///
+  /// Safe on every tick: it never touches the engine, never runs while the
+  /// stream is already starved, and repositions at most once per 300 ms and
+  /// 1.5 s of audio. The transfer itself refuses to move to bytes it already
+  /// holds, and refuses to move at all once the file is complete (that seek is
+  /// a plain disk read already).
+  void hintSeek(Duration target) {
+    if (_disposed || !_streaming) return;
+    final session = _streamSession;
+    if (session == null || session.isComplete) return;
+    if (!_live(_handle)) return;
+    // A starved stream must never be diverted further.
+    if (isBuffering.value) return;
+
+    // The live playback keeps look-ahead priority: only divert the connection
+    // while the decoded buffer is comfortably ahead, so the gesture can never
+    // make playing audio stutter.
+    if (isPlaying.value &&
+        buffered.value - position.value < const Duration(seconds: 5)) {
+      return;
+    }
+
+    // One reposition per 300 ms, and only when the target actually moved.
+    final last = _hintTarget;
+    if (last != null &&
+        (target - last).inMilliseconds.abs() < 1500) {
+      return;
+    }
+    final now = DateTime.now();
+    if (_hintAt != null &&
+        now.difference(_hintAt!) < const Duration(milliseconds: 300)) {
+      return;
+    }
+    _hintTarget = target;
+    _hintAt = now;
+
+    final index = _streamIndex;
+    if (index != null) {
+      final byte = index.adtsOffsetAtTime(target);
+      session.jumpTo(index.windowAt(byte, _feedWindowBytes).fileStart);
+      return;
+    }
+    final total = session.total ?? 0;
+    final totalMs = duration.value.inMilliseconds;
+    if (total <= 0 || totalMs <= 0) return;
+    final fraction = (target.inMilliseconds / totalMs).clamp(0.0, 1.0);
+    session.jumpTo((total * fraction).round());
   }
 
   Future<void> seek(Duration target) async {
@@ -664,7 +738,7 @@ class PlaybackService {
         built = _soloud.setPullBufferStream(
           audioSizeBytes: remainingAudioBytes,
           format: BufferType.auto,
-          bufferSizeBytes: 4 * 1024 * 1024,
+          bufferSizeBytes: _streamBufferBytes,
           bufferTriggerPosition: 0.75,
           sampleRate: index?.sampleRate ?? 44100,
           channels: (index?.channels ?? 2) == 1
@@ -712,6 +786,8 @@ class PlaybackService {
       if (wasPlaying) {
         _seekTarget = actualStartTime;
         _seekDeadline = DateTime.now().add(const Duration(seconds: 6));
+        _seekProgress = session.bytesAvailable;
+        _seekExtensions = 0;
       }
       return true;
     } finally {
@@ -1484,6 +1560,8 @@ class PlaybackService {
 
     _incomingHandle = null;
     _incomingSource = null;
+    _hintTarget = null;
+    _hintAt = null;
   }
 
   Future<void> stop() async {
@@ -1544,11 +1622,31 @@ class PlaybackService {
       // Sound is flowing — the stream caught up to the target.
       _seekDeadline = null;
       _seekTarget = null;
+      _seekProgress = null;
+      _seekExtensions = 0;
       return;
     }
     if (DateTime.now().isBefore(deadline)) return;
+
+    // Bytes still arriving means the seek is slow, not lost: the first window
+    // is on its way over a live connection, and abandoning it for the
+    // whole-file route would wait longer still. Two extensions, then the
+    // guarantee takes over.
+    final covered = _streamSession?.bytesAvailable;
+    if (covered != null &&
+        _seekProgress != null &&
+        covered > _seekProgress! &&
+        _seekExtensions < 2) {
+      _seekExtensions++;
+      _seekProgress = covered;
+      _seekDeadline = DateTime.now().add(const Duration(seconds: 5));
+      return;
+    }
+
     _seekDeadline = null;
     _seekTarget = null;
+    _seekProgress = null;
+    _seekExtensions = 0;
     if (!isPlaying.value) return;
     final track = currentTrack.value;
     // The handoff retires the silent stream and lands on the download route at

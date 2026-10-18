@@ -294,6 +294,7 @@ class TactileSeekBar extends StatefulWidget {
     required this.position,
     required this.duration,
     required this.onSeek,
+    this.onSeekHint,
     this.buffered = 0,
     this.enabled = true,
     super.key,
@@ -305,6 +306,10 @@ class TactileSeekBar extends StatefulWidget {
   /// 0.0–1.0.
   final double buffered;
   final ValueChanged<Duration> onSeek;
+
+  /// Fired on every drag tick, before the release. The player uses it to start
+  /// fetching the dragged-to spot so the seek that follows is instant.
+  final ValueChanged<Duration>? onSeekHint;
   final bool enabled;
 
   @override
@@ -424,6 +429,8 @@ class _TactileSeekBarState extends State<TactileSeekBar> {
                           _seekDebounceTimer?.cancel();
                           _seekIssued = false;
                           setState(() => _dragMilliseconds = val);
+                          widget.onSeekHint
+                              ?.call(Duration(milliseconds: val.round()));
                         }
                       : null,
                   onChangeEnd: canSeek

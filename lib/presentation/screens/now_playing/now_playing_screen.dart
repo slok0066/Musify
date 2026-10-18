@@ -308,6 +308,7 @@ class _Face extends StatelessWidget {
                       enabled: state.canSeek,
                       buffered: state.bufferedFraction,
                       onSeek: player.seek,
+                      onSeekHint: player.seekHint,
                     ),
                   ),
                   const SizedBox(height: SwissGrid.md),
@@ -604,6 +605,7 @@ class _StripSegment extends StatelessWidget {
 class _SeekSection extends StatelessWidget {
   const _SeekSection({
     required this.onSeek,
+    required this.onSeekHint,
     this.enabled,
     this.buffered,
   });
@@ -611,6 +613,7 @@ class _SeekSection extends StatelessWidget {
   final bool? enabled;
   final double? buffered;
   final ValueChanged<Duration> onSeek;
+  final ValueChanged<Duration> onSeekHint;
 
   @override
   Widget build(BuildContext context) {
@@ -627,6 +630,7 @@ class _SeekSection extends StatelessWidget {
         buffered: state.bufferedFraction,
         enabled: state.canSeek,
         onSeek: onSeek,
+        onSeekHint: onSeekHint,
       ),
     );
   }
