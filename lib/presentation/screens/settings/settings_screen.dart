@@ -269,33 +269,6 @@ class _SettingsView extends StatelessWidget {
                           value: settings.instantStart,
                           onChanged: cubit.setInstantStart,
                         ),
-                        const SizedBox(height: SwissGrid.md),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                'SPECTRUM DISPLAY',
-                                style: SwissType.label.copyWith(color: t.ink),
-                              ),
-                            ),
-                            PillStrip(
-                              padding: EdgeInsets.zero,
-                              children: [
-                                for (final mode in VisualizerMode.values)
-                                  SwissPill(
-                                    label: switch (mode) {
-                                      VisualizerMode.fft => 'FFT',
-                                      VisualizerMode.wave => 'WAVE',
-                                      VisualizerMode.off => 'OFF',
-                                    },
-                                    selected: settings.visualizer == mode,
-                                    dense: true,
-                                    onTap: () => cubit.setVisualizer(mode),
-                                  ),
-                              ],
-                            ),
-                          ],
-                        ),
                       ],
                     ),
                   ),

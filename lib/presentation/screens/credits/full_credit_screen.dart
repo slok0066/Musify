@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/build_info.dart';
@@ -31,9 +30,10 @@ class _FullCreditScreenState extends State<FullCreditScreen> {
   }
 
   void _persistSeenDirect() {
-    SharedPreferences.getInstance().then((prefs) {
-      prefs.setBool(SettingsService.seenCreditsKey, true);
-    }).catchError((_) {});
+    // Durably, the instant the page is painted: the prefs flag (asynchronous)
+    // plus the launch marker (a synchronous file write), so swiping the app
+    // away from recents right here cannot bring the page back.
+    SettingsService.markCreditsSeenNow();
   }
 
   void _markSeen(BuildContext context) {

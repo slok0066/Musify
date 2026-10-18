@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Chassis themes.
@@ -282,27 +285,79 @@ class SettingsService extends ValueNotifier<MusifySettings> {
   /// not "first install" — the credits gate must not act on that.
   bool get isLoaded => _loaded;
 
+  /// A file that answers "has this installation launched before?".
+  ///
+  /// SharedPreferences writes are asynchronous, and the app can be swiped away
+  /// from recents seconds after the welcome page paints — losing the write and
+  /// bringing the page back on every launch. This marker is written
+  /// *synchronously* on the first launch, before that launch's page can even
+  /// appear, so the race cannot be lost.
+  static const String _launchMarker = 'musify.launched';
+
+  static Directory? _markerDir;
+
   /// Hydrates from disk. Guarded by the caller's startup timeout, so a missing
   /// or corrupt store simply yields defaults.
   Future<void> load() async {
+    // `false` = a previous launch left the marker, `true` = this is the very
+    // first launch, `null` = unknown (no storage), in which case only the
+    // preferences flags speak. Asked first, because it answers even when the
+    // preferences store is broken.
+    final firstLaunch = await _readAndStampLaunchMarker();
     try {
       _prefs = await SharedPreferences.getInstance();
-      var loaded = MusifySettings.fromJson(_prefs?.getString(_key));
+      final loaded = MusifySettings.fromJson(_prefs?.getString(_key));
       final seenFlag = _prefs?.getBool(seenCreditsKey) ?? false;
-      if (seenFlag && !loaded.hasSeenCredits) {
-        loaded = loaded.copyWith(hasSeenCredits: true);
-      }
+      final seen =
+          seenFlag || loaded.hasSeenCredits || firstLaunch == false;
+
       _loaded = true;
-      value = loaded;
+      value = loaded.copyWith(hasSeenCredits: seen);
       // The gate must hear "the store was read" even when the value happens to
       // equal the defaults, which the notifier alone would swallow.
       notifyListeners();
     } catch (e) {
       debugPrint('SettingsService.load failed, using defaults: $e');
       _loaded = true;
-      value = const MusifySettings();
+      value = const MusifySettings()
+          .copyWith(hasSeenCredits: firstLaunch == false);
       notifyListeners();
     }
+  }
+
+  /// Reads the launch marker, stamping it first if this is the first launch.
+  static Future<bool?> _readAndStampLaunchMarker() async {
+    try {
+      final dir = _markerDir ??= await getApplicationSupportDirectory();
+      if (!dir.existsSync()) dir.createSync(recursive: true);
+      final marker = File('${dir.path}${Platform.pathSeparator}$_launchMarker');
+      if (marker.existsSync()) return false;
+      marker.writeAsStringSync('1', flush: true);
+      return true;
+    } catch (e) {
+      debugPrint('launch marker unavailable: $e');
+      return null;
+    }
+  }
+
+  /// Records the credits page as seen *now*: the settings flag (asynchronous)
+  /// and the launch marker (synchronous file write), so even an instant
+  /// swipe-away from recents cannot bring the page back next launch.
+  static void markCreditsSeenNow() {
+    unawaited(
+      SharedPreferences.getInstance()
+          .then((prefs) => prefs.setBool(seenCreditsKey, true))
+          .catchError((Object _) => false),
+    );
+    final dir = _markerDir;
+    if (dir == null) {
+      unawaited(_readAndStampLaunchMarker());
+      return;
+    }
+    try {
+      File('${dir.path}${Platform.pathSeparator}$_launchMarker')
+          .writeAsStringSync('1', flush: true);
+    } catch (_) {}
   }
 
   /// Applies [next] immediately and persists it in the background.

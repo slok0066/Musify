@@ -1,8 +1,8 @@
 {
-  "version": "1.0.10",
-  "build": 11,
-  "release_notes": "• Scrubbing a streaming song can no longer silence or freeze the player: the audio engine is never rebuilt mid-playback — nearby seeks are instant, and a far seek cleanly switches to the downloaded file at the position you picked\n• Fast drags are coalesced: playback always lands on the last spot you released the scrubber on\n• Credit & welcome page: only shown once the settings store confirms a first install — it can no longer reappear on every launch\n• Player artwork is sharper: covers are requested at the highest 500x500 rendition and rendered with high-quality filtering",
-  "download_url": "https://github.com/slok0066/Musify/releases/download/v1.0.10/app-arm64-v8a-release.apk",
-  "apk_url": "https://github.com/slok0066/Musify/releases/download/v1.0.10/app-arm64-v8a-release.apk",
+  "version": "1.0.11",
+  "build": 12,
+  "release_notes": "• Seeking a streaming song is fast again: a far scrub rebuilds the stream at the position you released, sound resumes in about a second instead of after a full download — nearby seeks stay instant\n• If the rebuilt stream stays silent, the download route takes over automatically at your position, so a seek always ends with sound where you put it\n• The credit & welcome page can no longer come back: a durable launch marker is stamped at first start, so even swiping the app away from recents right after it appears cannot show it again\n• The spectrum analyser is removed from the player",
+  "download_url": "https://github.com/slok0066/Musify/releases/download/v1.0.11/app-arm64-v8a-release.apk",
+  "apk_url": "https://github.com/slok0066/Musify/releases/download/v1.0.11/app-arm64-v8a-release.apk",
   "mandatory": false
 }

@@ -186,6 +186,11 @@ class PlaybackService {
   /// The newest seek requested while [_handoffToDownload] was in flight.
   Duration? _pendingSeekTarget;
 
+  /// True while the pull stream is being rebuilt at a new position. The
+  /// rebuild is sequential (old voice retired, then the new one built), and
+  /// only one may be in flight at a time.
+  bool _restartingStream = false;
+
   /// Forces the next [_startCurrent] down the proven download route. A seek
   /// handoff sets it so the restart cannot re-enter live streaming and undo
   /// the position the user picked.
@@ -472,9 +477,9 @@ class PlaybackService {
     _seekDeadline = null;
     _seekTarget = null;
 
-    // A handoff to the download route is already running: keep only the newest
-    // intent. The handoff applies it before it returns, so no drag is lost.
-    if (_handoffToDownload) {
+    // A handoff/rebuild is already running: keep only the newest intent. It is
+    // applied before that operation returns, so no drag is lost.
+    if (_handoffToDownload || _restartingStream) {
       _pendingSeekTarget = clamped;
       return;
     }
@@ -497,11 +502,10 @@ class PlaybackService {
     }
 
     // 2. While streaming: a target inside the engine's decoded window is a
-    //    native, instant seek. Anything outside it hands the voice to the
-    //    download route at the target — slower to arrive, but it always ends
-    //    with sound where the user dropped the scrubber, and it never rebuilds
-    //    a pull stream under a live voice (the rebuild is what used to leave
-    //    the player silent, or take the whole app down).
+    //    native, instant seek. Anything outside it rebuilds the stream at the
+    //    target — sequentially, the way a track change builds a voice, so it
+    //    is just as safe — and only if that fails does the download route take
+    //    over. Every branch ends with sound.
     if (_streaming) {
       if (_seekInBuffer(clamped)) {
         if (is8DEnabled.value) {
@@ -512,6 +516,13 @@ class PlaybackService {
         }
         return;
       }
+      if (await _restartStreamAt(track, clamped)) {
+        final queued = _pendingSeekTarget;
+        _pendingSeekTarget = null;
+        if (queued != null && queued != clamped) await seek(queued);
+        return;
+      }
+      if (_disposed) return;
       await _handoffStreamToDownload(track, clamped);
       return;
     }
@@ -559,6 +570,152 @@ class PlaybackService {
     } catch (e) {
       debugPrint('in-buffer seek unavailable: $e');
       return false;
+    }
+  }
+
+  /// Rebuilds the pull stream around [target], sequentially.
+  ///
+  /// The decoded window is re-anchored at the target frame and the feeds
+  /// continue from the matching byte offset, so playback picks up a second or
+  /// so after the drag instead of waiting for the whole download. The old
+  /// voice is stopped and disposed *before* the next stream is created — the
+  /// same order every track change uses — so nothing native is ever churned
+  /// under a live voice. Returns false when no new voice came up; the caller
+  /// then owns the fallback.
+  Future<bool> _restartStreamAt(Track track, Duration target) async {
+    if (_restartingStream) return false;
+    _restartingStream = true;
+    try {
+      final session = _streamSession;
+      final index = _streamIndex;
+      if (session == null) return false;
+
+      final int startByteOffset;
+      final Duration actualStartTime;
+      final int remainingAudioBytes;
+      if (index != null) {
+        startByteOffset = index.adtsOffsetAtTime(target);
+        actualStartTime = index.timeAtAdtsOffset(startByteOffset);
+        remainingAudioBytes = (index.totalAdtsBytes - startByteOffset)
+            .clamp(1024, index.totalAdtsBytes);
+      } else {
+        final total = session.total ?? 1;
+        final totalMs = duration.value.inMilliseconds <= 0
+            ? 1
+            : duration.value.inMilliseconds;
+        final fraction = (target.inMilliseconds / totalMs).clamp(0.0, 1.0);
+        startByteOffset = (total * fraction).round();
+        actualStartTime = target;
+        remainingAudioBytes = (total - startByteOffset).clamp(1024, total);
+      }
+
+      final wasPlaying = isPlaying.value;
+
+      // The old voice's start-up watchdog belongs to the retired stream; the
+      // rebuilt one gets the seek deadline below instead.
+      _streamWatchdog?.cancel();
+      _streamWatchdog = null;
+
+      // Retire the old voice completely first: cancel its finish listener,
+      // stop it, dispose its source. Only then is its successor built.
+      await _finishSub?.cancel();
+      _finishSub = null;
+      final oldHandle = _handle;
+      _handle = null;
+      if (_live(oldHandle)) {
+        try {
+          await _soloud.stop(oldHandle!);
+        } catch (e) {
+          debugPrint('stream stop failed: $e');
+        }
+      }
+      final oldSource = _source;
+      _source = null;
+      if (oldSource != null) {
+        try {
+          await _soloud.disposeSource(oldSource);
+        } catch (e) {
+          debugPrint('stream dispose failed: $e');
+        }
+      }
+      if (_disposed || !_streaming) return false;
+
+      // Commit the new window; the epoch bump retires feeds from the previous
+      // incarnation that were still in flight.
+      _streamEpoch++;
+      _streamByteOffset = startByteOffset;
+      _streamTimeOffset = actualStartTime;
+      _feedsInFlight.clear();
+      _streamStumbles = 0;
+      _streamStarted = false;
+
+      // Reposition the transfer so the first read returns the target frame
+      // without waiting for the pump to walk there.
+      if (index != null) {
+        final window = index.windowAt(startByteOffset, _feedWindowBytes);
+        session.jumpTo(window.fileStart);
+      } else {
+        session.jumpTo(startByteOffset);
+      }
+
+      AudioSource? built;
+      SoundHandle? handle;
+      try {
+        built = _soloud.setPullBufferStream(
+          audioSizeBytes: remainingAudioBytes,
+          format: BufferType.auto,
+          bufferSizeBytes: 4 * 1024 * 1024,
+          bufferTriggerPosition: 0.75,
+          sampleRate: index?.sampleRate ?? 44100,
+          channels: (index?.channels ?? 2) == 1
+              ? Channels.mono
+              : Channels.stereo,
+          onMoreDataIsNeeded: (offset) => unawaited(_feedStream(offset)),
+          onBuffering: (buffering, handle, time) {
+            if (_disposed || !_streaming) return;
+            isBuffering.value = buffering;
+            if (!buffering) _streamStarted = true;
+            _bump();
+          },
+          onAudioDuration: (seconds) {},
+        );
+        handle = _soloud.play3d(built, 0, 0, 1, volume: 1);
+      } catch (e) {
+        debugPrint('stream rebuild failed: $e');
+      }
+
+      if (built == null || handle == null || !_live(handle)) {
+        if (built != null) {
+          try {
+            await _soloud.disposeSource(built);
+          } catch (_) {}
+        }
+        return false;
+      }
+
+      _source = built;
+      _handle = handle;
+      _finishSub = built.allInstancesFinished.listen((_) => _notifyEnd());
+      _soloud.set3dSourceMinMaxDistance(handle, 1, 8);
+      _soloud.set3dSourceAttenuation(handle, 1, 1);
+      if (!wasPlaying) _soloud.setPause(handle, true);
+      if (is8DEnabled.value) _apply8DToActiveVoice();
+
+      position.value = actualStartTime;
+      _seekSuppressedUntil =
+          DateTime.now().add(const Duration(milliseconds: 300));
+      isBuffering.value = true;
+      _bump();
+
+      // Silent until the deadline means the rebuilt stream is not coming:
+      // the watchdog hands the position to the download route instead.
+      if (wasPlaying) {
+        _seekTarget = actualStartTime;
+        _seekDeadline = DateTime.now().add(const Duration(seconds: 6));
+      }
+      return true;
+    } finally {
+      _restartingStream = false;
     }
   }
 
@@ -1394,7 +1551,9 @@ class PlaybackService {
     _seekTarget = null;
     if (!isPlaying.value) return;
     final track = currentTrack.value;
-    if (track != null) unawaited(_fallBackFromStream(track, startAt: target));
+    // The handoff retires the silent stream and lands on the download route at
+    // the target — without blacklisting the track's streaming for the session.
+    if (track != null) unawaited(_handoffStreamToDownload(track, target));
   }
 
   /// Mirrors the engine's decoded-buffer window into the progress readout, and
