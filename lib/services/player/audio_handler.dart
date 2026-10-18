@@ -40,6 +40,18 @@ class MusifyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler
   Timer? _positionTicker;
   bool _disposed = false;
 
+  /// The OS audio session, kept once acquired. Android only delivers focus
+  /// callbacks (calls, other apps starting, headphones unplugging) while a
+  /// focus request is held, so playback must activate this session when it
+  /// starts sounding.
+  AudioSession? _session;
+  bool _focusRequested = false;
+
+  /// True when the current pause was caused by an audio interruption (a call,
+  /// or another app taking focus). Only such a pause is undone when the
+  /// interruption ends — a pause the user chose always wins.
+  bool _interruptionPaused = false;
+
   /// Last published position, so a paused player does not spam the platform.
   Duration _lastPosition = Duration.zero;
 
@@ -50,9 +62,17 @@ class MusifyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler
   Future<void> configureSession() async {
     try {
       final session = await AudioSession.instance;
-      await session.configure(const AudioSessionConfiguration.music());
+      _session = session;
+      try {
+        await session.configure(const AudioSessionConfiguration.music());
+      } catch (e) {
+        // A configuration failure must not cost us the interruption wiring.
+        debugPrint('AudioSession configure skipped: $e');
+      }
 
-      // Unplugging headphones must pause — never blast the speaker.
+      // Unplugging headphones must pause — never blast the speaker. (Android
+      // only registers this broadcast once a focus request has been granted,
+      // which [_ensureAudioFocus] does on the first play.)
       _noisySub = session.becomingNoisyEventStream.listen((_) {
         if (_player.isPlaying.value) unawaited(_player.pause());
       });
@@ -63,7 +83,16 @@ class MusifyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler
             case AudioInterruptionType.duck:
               _player.duck();
             case AudioInterruptionType.pause:
+              // A transient loss (a call): remember that this pause was not
+              // the user's, so the end of the interruption may undo it.
+              if (_player.isPlaying.value) _interruptionPaused = true;
+              unawaited(_player.pause());
             case AudioInterruptionType.unknown:
+              // A permanent loss (another app took focus): Android never
+              // returns focus on its own, and the plugin has already given
+              // the request up — the next play must request it again.
+              _interruptionPaused = false;
+              _focusRequested = false;
               unawaited(_player.pause());
           }
         } else {
@@ -71,7 +100,8 @@ class MusifyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler
             case AudioInterruptionType.duck:
               _player.unduck();
             case AudioInterruptionType.pause:
-              unawaited(_player.resume());
+              if (_interruptionPaused) unawaited(_player.resume());
+              _interruptionPaused = false;
             case AudioInterruptionType.unknown:
               break;
           }
@@ -80,8 +110,41 @@ class MusifyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler
 
       // Route changes feed the "Auto-enable 8D on headphones" setting.
       _devicesSub = session.devicesStream.listen(_onDevicesChanged);
+
+      // Focus is held only while sound is flowing: the first play activates.
+      _player.isPlaying.addListener(_onPlayingChanged);
+      if (_player.isPlaying.value) unawaited(_ensureAudioFocus());
     } catch (e) {
       debugPrint('AudioSession configuration skipped: $e');
+    }
+  }
+
+  /// Takes audio focus the moment playback starts sounding. That request is
+  /// what makes Android pause Musify when another app (YouTube, a call) asks
+  /// for the same focus.
+  void _onPlayingChanged() {
+    if (_disposed) return;
+    if (!_player.isPlaying.value) return;
+    // A deliberate resume ends any pending interruption bookkeeping.
+    _interruptionPaused = false;
+    unawaited(_ensureAudioFocus());
+  }
+
+  Future<void> _ensureAudioFocus() async {
+    final session = _session;
+    if (session == null || _disposed || _focusRequested) return;
+    _focusRequested = true;
+    try {
+      final granted = await session.setActive(true);
+      if (!granted) {
+        // Denied (some OEMs do this during calls): allow the next play to ask
+        // again rather than thinking focus is held.
+        _focusRequested = false;
+        debugPrint('audio focus request not granted');
+      }
+    } catch (e) {
+      _focusRequested = false;
+      debugPrint('audio focus request failed: $e');
     }
   }
 
@@ -221,6 +284,7 @@ class MusifyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler
 
   @override
   Future<void> stop() async {
+    _interruptionPaused = false;
     await _player.stop();
     await super.stop();
   }
@@ -266,8 +330,17 @@ class MusifyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler
   Future<void> disposeAdapter() async {
     _disposed = true;
     _positionTicker?.cancel();
+    _player.isPlaying.removeListener(_onPlayingChanged);
     await _noisySub?.cancel();
     await _interruptionSub?.cancel();
     await _devicesSub?.cancel();
+    if (_focusRequested) {
+      _focusRequested = false;
+      try {
+        await _session?.setActive(false);
+      } catch (e) {
+        debugPrint('audio focus release skipped: $e');
+      }
+    }
   }
 }

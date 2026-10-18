@@ -191,19 +191,18 @@ class PlaybackService {
   /// only one may be in flight at a time.
   bool _restartingStream = false;
 
+  /// True while a failed stream is being replaced by the download route, so a
+  /// burst of failed feeds cannot start the same fallback twice.
+  bool _fallingBack = false;
+
   /// Forces the next [_startCurrent] down the proven download route. A seek
   /// handoff sets it so the restart cannot re-enter live streaming and undo
   /// the position the user picked.
   bool _forceClassicNextStart = false;
 
-  /// True while a stream is migrating to a finished disk file, so the
-  /// completion poll cannot start the same migration twice.
-  bool _switchingToLocal = false;
-
   /// Bumped whenever the pull stream's byte window is replaced (start, seek,
-  /// teardown) and whenever the voice migrates to a disk file. Feeds capture
-  /// it on entry and abort when it changes, so a read that was in flight
-  /// during a seek can never write into the wrong source.
+  /// teardown). Feeds capture it on entry and abort when it changes, so a read
+  /// that was in flight during a seek can never write into the wrong source.
   int _streamEpoch = 0;
 
   /// After a re-seek the engine must produce sound before [_seekDeadline];
@@ -235,16 +234,18 @@ class PlaybackService {
   /// short enough that a seek is not waiting on a quarter-megabyte read.
   static const int _feedWindowBytes = 192 * 1024;
 
+  /// The first window of a fresh window — a play start or a rebuild after a
+  /// seek. Half the size, so the very first sound waits on half the bytes:
+  /// roughly twice the responsiveness from drop (or play) to audio. The
+  /// engine asks for its next window while this one is still playing, so the
+  /// smaller first read never starves it.
+  static const int _firstFeedBytes = 96 * 1024;
+
   /// The engine's decoded circular buffer for a progressive stream. 10 MB of
   /// stereo float32 is about 30 seconds of audio, so a seek inside that window
   /// is a native, instant move — the old 4 MB held only ~12 s. This is also
   /// the plugin's own default, so no engine ever meets a size it dislikes.
   static const int _streamBufferBytes = 10 * 1024 * 1024;
-
-  /// How far behind its target a disk seek may land and still count as a real
-  /// move: MP3 frames snap to ~26 ms, while a seek that failed outright sits
-  /// at zero — the one outcome that must never be adopted.
-  static const Duration _localSeekSlack = Duration(milliseconds: 1200);
 
   bool get engineReady => _engineReady;
 
@@ -453,6 +454,10 @@ class PlaybackService {
 
   Future<void> pause() async {
     if (_crossfading) _abortCrossfade();
+    // A pause is a deliberate silence: the seek watchdog must not fire a
+    // handoff behind the user's back while the player is expected to be quiet.
+    _seekDeadline = null;
+    _seekTarget = null;
     final handle = _handle;
     if (_live(handle)) {
       _soloud.setPause(handle!, true);
@@ -503,8 +508,11 @@ class PlaybackService {
     final session = _streamSession;
     if (session == null || session.isComplete) return;
     if (!_live(_handle)) return;
-    // A starved stream must never be diverted further.
-    if (isBuffering.value) return;
+    // A starved, already-sounding stream must never be diverted further —
+    // but while the first window of a start or a rebuild is still loading
+    // there is nothing to interrupt: steering the fetch toward the newest
+    // drop is exactly what shortens the wait.
+    if (_streamStarted && isBuffering.value) return;
 
     // The live playback keeps look-ahead priority: only divert the connection
     // while the decoded buffer is comfortably ahead, so the gesture can never
@@ -556,13 +564,15 @@ class PlaybackService {
     _seekDeadline = null;
     _seekTarget = null;
 
-    // A handoff, a rebuild or a migration to disk is already running: keep
-    // only the newest intent. It is applied before that operation returns, so
-    // no drag is lost.
-    if (_handoffToDownload || _restartingStream || _switchingToLocal) {
+    // A handoff, a rebuild or a failure fallback is already running: keep only
+    // the newest intent. It is applied before that operation returns, so no
+    // drag is lost.
+    if (_handoffToDownload || _restartingStream || _fallingBack) {
       _pendingSeekTarget = clamped;
       return;
     }
+    // Nothing is in flight, so any older coalesced intent is stale.
+    _pendingSeekTarget = null;
 
     final track = currentTrack.value;
     if (track == null) return;
@@ -583,22 +593,14 @@ class PlaybackService {
         return;
       }
 
-      // 2. Outside the window a complete copy on disk is the honest answer:
-      //    one silent swap to a native file voice, and every later seek is a
-      //    direct disk move. When the swap cannot be trusted the live stream
-      //    is left untouched and the rebuild below takes over.
-      final localPath = _streamSession?.path ?? _completedPath?.call(track);
-      if (localPath != null &&
-          localPath.isNotEmpty &&
-          await _switchToLocalFile(localPath, seekTo: clamped)) {
-        return;
-      }
-      if (_disposed) return;
-
-      // 3. A live transfer rebuilds the stream at the target — sequentially,
-      //    the way a track change builds a voice, so it is just as safe — and
-      //    only if that fails does the download route take over. Every branch
-      //    ends with sound.
+      // 2. Outside the window the stream is rebuilt at the target — the same
+      //    sequential order a track change uses, so it is just as safe. The
+      //    old voice is stopped first: playback waits exactly where the
+      //    scrubber was dropped and continues there as soon as the bytes are
+      //    in. A complete file serves that wait with an instant disk read; a
+      //    live one fetches a single window. When the rebuild cannot come up,
+      //    the download route below takes over, and every branch ends in
+      //    sound.
       if (await _restartStreamAt(track, clamped)) {
         final queued = _pendingSeekTarget;
         _pendingSeekTarget = null;
@@ -610,7 +612,7 @@ class PlaybackService {
       return;
     }
 
-    // 4. A loaded file voice seeks natively.
+    // 3. A loaded file voice seeks natively.
     final handle = _handle;
     if (_live(handle)) {
       try {
@@ -633,8 +635,7 @@ class PlaybackService {
   /// that window is a native, allocation-free seek: no source is rebuilt, no
   /// feed is disturbed, so it can neither leave the player silent nor restart
   /// the song. Returns false when the target is outside the window — the
-  /// caller then migrates to the complete file, rebuilds the stream, or hands
-  /// off to the download route.
+  /// caller then rebuilds the stream or hands off to the download route.
   bool _seekInBuffer(Duration target) {
     final handle = _handle;
     final source = _source;
@@ -841,157 +842,6 @@ class PlaybackService {
       if (!wasPlaying && isPlaying.value) await pause();
     } finally {
       _handoffToDownload = false;
-    }
-  }
-
-  /// Replaces a live pull stream with the complete file at [path], landing on
-  /// the newest requested position *silently*.
-  ///
-  /// The new voice is born paused, so position zero is never audible, and only
-  /// a voice that really landed at the target is adopted — a disk seek that
-  /// stayed at zero would otherwise restart the song from its first second the
-  /// moment the stream is retired. When anything fails the live stream is left
-  /// exactly as it was, so the caller keeps its whole fallback chain (ninth
-  /// law). Re-entrant calls are ignored. Returns true when the file voice took
-  /// over.
-  Future<bool> _switchToLocalFile(String path, {required Duration seekTo}) async {
-    if (_switchingToLocal) return false;
-    _switchingToLocal = true;
-    // The old stream keeps playing while the file loads, and its position is
-    // not where the user asked to be: the readout stays parked on the target
-    // instead of drifting with the outgoing playhead.
-    _seekSuppressedUntil = DateTime.now().add(const Duration(seconds: 30));
-    var adoptedVoice = false;
-    AudioSource? loaded;
-    SoundHandle? loadedHandle;
-    try {
-      final epoch = _streamEpoch;
-      final trackId = currentTrack.value?.id;
-      final wasPlaying = isPlaying.value;
-
-      loaded = await _soloud.loadFile(path, mode: LoadMode.disk);
-      // The voice may have been retired while the file was loading — a track
-      // change, a rebuild, a teardown. Adopting now would clobber a newer one.
-      if (_disposed ||
-          !_streaming ||
-          _streamEpoch != epoch ||
-          currentTrack.value?.id != trackId) {
-        return false;
-      }
-
-      // The newest intent wins: a drag released while the file was loading is
-      // answered by this one silent seek instead of being overwritten by it.
-      var target = _pendingSeekTarget ?? seekTo;
-      _pendingSeekTarget = null;
-      final length = _soloud.getLength(loaded);
-      if (length > Duration.zero && target > length) target = length;
-
-      // Paused from its first frame: the seek lands while nothing can hear the
-      // voice, so a slow disk walk can never play the song from the top.
-      final handle = _soloud.play3d(loaded, 0, 0, 1, volume: 1, paused: true);
-      if (!_live(handle)) return false;
-      loadedHandle = handle;
-
-      _soloud.seek(handle, target);
-      // A seek that silently stayed at zero would restart the song once the
-      // stream is retired. Trust only a real move.
-      final landed = _soloud.getPosition(handle);
-      if (landed + _localSeekSlack < target) {
-        debugPrint('_switchToLocalFile: seek stayed at '
-            '${landed.inMilliseconds}ms (wanted ${target.inMilliseconds}ms) '
-            '— keeping the stream');
-        return false;
-      }
-
-      // Point of no return: adopt the positioned voice, then retire the stream
-      // in the same turn so no feed can write into a half-migrated player.
-      final oldHandle = _handle;
-      final oldSource = _source;
-      final oldSession = _streamSession;
-      final oldSub = _finishSub;
-      final adopted = loaded;
-      adoptedVoice = true;
-
-      _streamEpoch++;
-      _streamSession = null;
-      _streamIndex = null;
-      _streaming = false;
-      _streamByteOffset = 0;
-      _streamTimeOffset = Duration.zero;
-      _streamWatchdog?.cancel();
-      _streamWatchdog = null;
-      _seekDeadline = null;
-      _seekTarget = null;
-      _feedsInFlight.clear();
-
-      _source = adopted;
-      _handle = handle;
-      loaded = null; // ownership moved: the cleanup must not dispose it
-      _soloud.set3dSourceMinMaxDistance(handle, 1, 8);
-      _soloud.set3dSourceAttenuation(handle, 1, 1);
-      _finishSub = adopted.allInstancesFinished.listen((_) => _onNaturalFinish());
-
-      position.value = target;
-      if (length > Duration.zero) duration.value = length;
-      buffered.value = duration.value;
-      bufferFraction.value = 1.0;
-
-      // Retire the stream first, then unpause the positioned voice: the swap
-      // is one handshake, not an overlap of two playheads.
-      unawaited(oldSub?.cancel());
-      if (_live(oldHandle)) {
-        try {
-          _soloud.stop(oldHandle!);
-        } catch (_) {}
-      }
-      if (wasPlaying) {
-        try {
-          _soloud.setPause(handle, false);
-        } catch (e) {
-          debugPrint('_switchToLocalFile: unpause failed: $e');
-        }
-      }
-
-      if (is8DEnabled.value) {
-        _apply8DToActiveVoice();
-        _orbitClock
-          ..stop()
-          ..reset()
-          ..start();
-      }
-
-      if (oldSource != null) {
-        try {
-          await _soloud.disposeSource(oldSource);
-        } catch (_) {}
-      }
-      oldSession?.release();
-
-      _seekSuppressedUntil = DateTime.now().add(const Duration(milliseconds: 300));
-      _bump();
-      return true;
-    } catch (e) {
-      debugPrint('_switchToLocalFile failed: $e');
-      return false;
-    } finally {
-      // Nothing was adopted: the orphan voice and source go away, and the live
-      // stream keeps playing as if this never happened.
-      if (!adoptedVoice) {
-        final orphan = loaded;
-        if (orphan != null) {
-          final handle = loadedHandle;
-          if (handle != null && _live(handle)) {
-            try {
-              _soloud.stop(handle);
-            } catch (_) {}
-          }
-          try {
-            await _soloud.disposeSource(orphan);
-          } catch (_) {}
-        }
-        _seekSuppressedUntil = null;
-      }
-      _switchingToLocal = false;
     }
   }
 
@@ -1266,7 +1116,12 @@ class PlaybackService {
     if (!_feedsInFlight.add(fileOffset)) return;
 
     try {
-      final end = math.min(fileOffset + _feedWindowBytes, total);
+      // The first window of a fresh window — a start or a rebuild after a
+      // seek — is half the size: its bytes are what the wait is spent on, so
+      // sound arrives about twice as fast. Every later window keeps the full
+      // size so the buffer never runs shallow.
+      final windowBytes = _streamStarted ? _feedWindowBytes : _firstFeedBytes;
+      final end = math.min(fileOffset + windowBytes, total);
       final bytes = await session.read(fileOffset, end);
       // The window may have been replaced while this read was in flight
       // (a seek, a migration to disk): the bytes are stale, drop them.
@@ -1298,7 +1153,10 @@ class PlaybackService {
     if (!_feedsInFlight.add(targetAdtsOffset)) return;
 
     try {
-      final window = index.windowAt(targetAdtsOffset, _feedWindowBytes);
+      // First window of a fresh window (start or seek): half the bytes, so
+      // the wait for the first sound is half as long — see [_firstFeedBytes].
+      final windowBytes = _streamStarted ? _feedWindowBytes : _firstFeedBytes;
+      final window = index.windowAt(targetAdtsOffset, windowBytes);
       // Mapped against the window that was committed *now*: a seek during the
       // read must not re-base this chunk into the new stream.
       final bufferOffset = window.adtsOffset - _streamByteOffset;
@@ -1330,6 +1188,9 @@ class PlaybackService {
   void _onFeedFailed(int offset, String reason) {
     _streamStumbles++;
     debugPrint('stream feed failed at $offset ($reason)');
+    if (_streamStumbles < 3) return;
+    final track = currentTrack.value;
+    if (track == null) return;
     if (_streamStarted) {
       // Mid-song: the queue keeps its place and the engine retries; say so
       // instead of pretending everything is fine.
@@ -1337,12 +1198,18 @@ class PlaybackService {
         errorText.value = 'STREAM INTERRUPTED';
         _bump();
       }
+      // A connection that died outright never serves another byte: hand the
+      // current position to the download route rather than leaving a silent,
+      // stuck player. A slow-but-alive connection keeps the engine retrying.
+      if (_streamSession?.error != null) {
+        _streamStumbles = 0;
+        unawaited(_fallBackFromStream(track, startAt: position.value));
+      }
       return;
     }
-    if (_streamStumbles >= 3) {
-      final track = currentTrack.value;
-      if (track != null) unawaited(_fallBackFromStream(track));
-    }
+    // No sound yet: land on the spot the scrubber was dropped at — a restart
+    // from zero is the one outcome a seek must never produce.
+    unawaited(_fallBackFromStream(track, startAt: position.value));
   }
 
   /// Shows transfer progress in the same readout the download path used.
@@ -1362,22 +1229,38 @@ class PlaybackService {
     Track track, {
     Duration startAt = Duration.zero,
   }) async {
-    if (_disposed) return;
+    if (_disposed || _fallingBack) return;
     if (currentTrack.value?.id != track.id) return;
-    _streamFailed.add(track.id);
-    _streamWatchdog?.cancel();
-    _streamWatchdog = null;
-    _seekDeadline = null;
-    _seekTarget = null;
-    debugPrint('progressive: falling back to the download route for ${track.id}');
-    await _teardownVoice();
-    if (_disposed) return;
-    buffered.value = Duration.zero;
-    bufferFraction.value = null;
-    await _startCurrent();
-    if (_disposed) return;
-    if (currentTrack.value?.id != track.id) return;
-    if (startAt > Duration.zero) await seek(startAt);
+    _fallingBack = true;
+    final wasPlaying = isPlaying.value;
+    try {
+      _streamFailed.add(track.id);
+      _streamWatchdog?.cancel();
+      _streamWatchdog = null;
+      _seekDeadline = null;
+      _seekTarget = null;
+      debugPrint('progressive: falling back to the download route for ${track.id}');
+      await _teardownVoice();
+      if (_disposed) return;
+      buffered.value = Duration.zero;
+      bufferFraction.value = null;
+      await _startCurrent();
+      if (_disposed) return;
+      // The download voice is live, so ordinary seeks work again: the newest
+      // intent (a drag released during the fallback beats the position the
+      // fallback started with) lands on the file natively.
+      _fallingBack = false;
+      if (currentTrack.value?.id != track.id) return;
+      final queued = _pendingSeekTarget;
+      _pendingSeekTarget = null;
+      final landAt = queued ?? startAt;
+      if (landAt > Duration.zero) await seek(landAt);
+      // A fallback that started while paused (a scrub that could not land on
+      // the live stream) must not turn into surprise playback.
+      if (!wasPlaying && isPlaying.value) await pause();
+    } finally {
+      _fallingBack = false;
+    }
   }
 
   /// Loads and plays [queue.value][_queueIndex].
@@ -1719,7 +1602,9 @@ class PlaybackService {
     _seekTarget = null;
     _seekProgress = null;
     _seekExtensions = 0;
-    if (!isPlaying.value) return;
+    // The engine auto-pauses while it is starved, which is exactly the state
+    // this deadline exists for — a "paused" engine here is a symptom, not a
+    // user intent (a real pause clears the deadline itself).
     final track = currentTrack.value;
     // The handoff retires the silent stream and lands on the download route at
     // the target — without blacklisting the track's streaming for the session.
@@ -1736,12 +1621,11 @@ class PlaybackService {
       final session = _streamSession;
       if (session != null && session.isComplete && total > Duration.zero) {
         // The whole file is on disk, so every remaining read is a plain disk
-        // read on the SAME pull voice. Swapping that voice out mid-play used
-        // to restart the song from the top — right after a fresh play for
-        // anything already cached, since a complete session reports complete
-        // on the very first tick. That swap now waits for the first seek
-        // outside the decoded window, where it is silent; here only the
-        // readout is refreshed.
+        // read on the SAME pull voice — no voice is ever swapped out mid-play
+        // (that swap used to restart the song from the top right after a
+        // fresh play, since a complete session reports complete on the very
+        // first tick). A far seek rebuilds in place, sequentially, and finds
+        // its bytes here instantly. Only the readout is refreshed.
         buffered.value = total;
         bufferFraction.value = 1.0;
       } else {

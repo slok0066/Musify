@@ -1,8 +1,8 @@
 {
-  "version": "1.0.14",
-  "build": 15,
-  "release_notes": "• Playing a song whose cache or download had just landed no longer starts it over — the whole-file voice swap that fired right after play (and mid-song when a fast download finished) now waits until you scrub past the buffered window\n• That swap is silent when it does happen: the file voice is born paused and only takes over once it has provably landed at your position, and a move that did not land keeps the stream playing instead of restarting the song\n• The instant-seek window now covers the full ~30 seconds from the very first second of a song (the start buffer was still 4 MB while seek rebuilds already had 10 MB)",
-  "download_url": "https://github.com/slok0066/Musify/releases/download/v1.0.14/app-arm64-v8a-release.apk",
-  "apk_url": "https://github.com/slok0066/Musify/releases/download/v1.0.14/app-arm64-v8a-release.apk",
+  "version": "1.0.15",
+  "build": 16,
+  "release_notes": "• Dropping the scrubber on a part that is not loaded now holds exactly there: the old voice stops at once and playback continues from that spot the moment its bytes arrive — no drift back to the old position, no restart from the top of the song\n• Loading is faster everywhere: the first chunk of a play or a seek is fetched at half the size, so the first sound arrives roughly twice as quickly, and a far seek on a song already on disk is served straight from the file instead of decoding the whole track first\n• Continuous dragging is safe: rapid releases coalesce into one final seek, a stream that fails after a seek now lands on your drop position instead of the start of the song, and the seek watchdog no longer gives up while the engine is merely starvation-paused\n• Audio focus: Musify asks Android for focus when it plays, so a call or another app like YouTube now pauses it — a call ending resumes, YouTube does not — and unplugging headphones pauses too",
+  "download_url": "https://github.com/slok0066/Musify/releases/download/v1.0.15/app-arm64-v8a-release.apk",
+  "apk_url": "https://github.com/slok0066/Musify/releases/download/v1.0.15/app-arm64-v8a-release.apk",
   "mandatory": false
 }
