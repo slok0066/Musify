@@ -1,8 +1,8 @@
 {
-  "version": "1.0.13",
-  "build": 14,
-  "release_notes": "• Checking for updates is reliable now: the app always asks GitHub for the very latest release, so a new version can no longer hide behind GitHub's five-minute file cache\n• Scrubbing prefetches the spot you are dragging to while your finger is down — the seek lands on bytes already on the device instead of opening a connection after you let go\n• The decoded audio window is 10 MB (about 30 seconds), so seeks within half a minute are instant, engine-native moves with no network at all\n• A slow-but-alive seek waits for its bytes instead of falling back to a full download",
-  "download_url": "https://github.com/slok0066/Musify/releases/download/v1.0.13/app-arm64-v8a-release.apk",
-  "apk_url": "https://github.com/slok0066/Musify/releases/download/v1.0.13/app-arm64-v8a-release.apk",
+  "version": "1.0.14",
+  "build": 15,
+  "release_notes": "• Playing a song whose cache or download had just landed no longer starts it over — the whole-file voice swap that fired right after play (and mid-song when a fast download finished) now waits until you scrub past the buffered window\n• That swap is silent when it does happen: the file voice is born paused and only takes over once it has provably landed at your position, and a move that did not land keeps the stream playing instead of restarting the song\n• The instant-seek window now covers the full ~30 seconds from the very first second of a song (the start buffer was still 4 MB while seek rebuilds already had 10 MB)",
+  "download_url": "https://github.com/slok0066/Musify/releases/download/v1.0.14/app-arm64-v8a-release.apk",
+  "apk_url": "https://github.com/slok0066/Musify/releases/download/v1.0.14/app-arm64-v8a-release.apk",
   "mandatory": false
 }
