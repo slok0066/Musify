@@ -22,6 +22,7 @@ import 'backup_service.dart';
 import 'media_cache.dart';
 import 'network_monitor.dart';
 import 'settings_service.dart';
+import 'update_service.dart';
 import 'player/playback_service.dart';
 
 /// The one and only service locator.
@@ -125,6 +126,10 @@ void configureDependencies() {
       store: locator<LocalStore>(),
       settings: locator<SettingsService>(),
     ),
+  );
+
+  locator.registerLazySingleton<UpdateService>(
+    () => UpdateService(locator<Dio>()),
   );
 
   locator.registerLazySingleton<PlaylistImporter>(

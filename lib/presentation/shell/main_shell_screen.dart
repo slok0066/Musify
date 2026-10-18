@@ -2,8 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../core/theme/swiss_tokens.dart';
+import '../../services/service_locator.dart';
+import '../../services/update_service.dart';
 import '../cubits/library_cubit.dart';
 import '../cubits/navigation_cubit.dart';
+import '../cubits/settings_cubit.dart';
+import '../screens/credits/full_credit_screen.dart';
 import '../screens/home/home_screen.dart';
 import '../screens/library/library_screen.dart';
 import '../screens/search/search_screen.dart';
@@ -21,6 +25,14 @@ class MainShellScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasSeenCredits = context.select<SettingsCubit, bool>(
+      (c) => c.state.settings.hasSeenCredits,
+    );
+
+    if (!hasSeenCredits) {
+      return const FullCreditScreen();
+    }
+
     return BlocListener<LibraryCubit, LibraryState>(
       listenWhen: (previous, next) =>
           next.toast != null && next.toast != previous.toast,
@@ -62,6 +74,7 @@ class MainShellScreen extends StatelessWidget {
   }
 }
 
+
 class _Chassis extends StatefulWidget {
   const _Chassis();
 
@@ -78,6 +91,28 @@ class _ChassisState extends State<_Chassis> {
   /// navigator is what used to bury the mini-player (and the tab bar) under the
   /// detail screen the moment a song was started from it.
   final GlobalKey<NavigatorState> _navKey = GlobalKey<NavigatorState>();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkUpdateSilently();
+    });
+  }
+
+  Future<void> _checkUpdateSilently() async {
+    await Future<void>.delayed(const Duration(milliseconds: 1500));
+    if (!mounted) return;
+    try {
+      final updateService = locator<UpdateService>();
+      final info = await updateService.checkForUpdate();
+      if (info != null && info.hasUpdate && mounted) {
+        UpdateService.showUpdateDialog(context, info);
+      }
+    } catch (_) {
+      // Silent degradation
+    }
+  }
 
   void _selectTab(AppTab tab) {
     // A tab tap is a jump home: leave any pushed detail screen behind.

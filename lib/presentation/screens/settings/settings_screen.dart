@@ -11,7 +11,9 @@ import '../../../core/build_info.dart';
 import '../../../core/theme/swiss_tokens.dart';
 import '../../../core/theme/tactile_decorations.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../services/service_locator.dart';
 import '../../../services/settings_service.dart';
+import '../../../services/update_service.dart';
 import '../../cubits/navigation_cubit.dart';
 import '../../cubits/player_cubit.dart';
 import '../../cubits/settings_cubit.dart';
@@ -464,32 +466,18 @@ class _SettingsView extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: SwissGrid.md),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 10),
-                            decoration: BoxDecoration(
-                              color: t.surfaceSunken,
-                              borderRadius:
-                                  BorderRadius.circular(SwissTokens.radiusFull),
-                              border: Border.all(color: t.hairline, width: 1),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.favorite, size: 14, color: t.accent),
-                                const SizedBox(width: 8),
-                                Text(
-                                  'Created by a human being called Shlok',
-                                  style: SwissType.label.copyWith(
-                                    color: t.ink,
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
+                          // Check for Updates
+                          TactileKeycap(
+                            height: 42,
+                            onPressed: () => _checkForUpdates(context),
+                            child: Center(
+                              child: Text(
+                                'CHECK FOR UPDATES',
+                                style: SwissType.label.copyWith(color: t.ink),
+                              ),
                             ),
                           ),
-                          const SizedBox(height: SwissGrid.sm),
+                          const SizedBox(height: SwissGrid.md),
                           Text(
                             kBuildLabel,
                             style: SwissType.micro.copyWith(color: t.inkFaint),
@@ -505,6 +493,56 @@ class _SettingsView extends StatelessWidget {
         );
       },
     );
+  }
+
+  static Future<void> _checkForUpdates(BuildContext context) async {
+    HapticFeedback.lightImpact();
+    final t = SwissTokens.of(context);
+    final scaffold = ScaffoldMessenger.of(context);
+
+    scaffold.showSnackBar(
+      SnackBar(
+        content: Text(
+          'Checking for updates...',
+          style: SwissType.label.copyWith(color: t.ink),
+        ),
+        backgroundColor: t.surfaceRaised,
+        duration: const Duration(seconds: 1),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+
+    final updateService = locator<UpdateService>();
+    final info = await updateService.checkForUpdate(force: true);
+
+    if (!context.mounted) return;
+    scaffold.hideCurrentSnackBar();
+
+    if (info != null && info.hasUpdate) {
+      UpdateService.showUpdateDialog(context, info);
+    } else {
+      scaffold.showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle_rounded, color: Colors.green, size: 18),
+              const SizedBox(width: 10),
+              Text(
+                'You are on the latest build (v$kAppVersion) ✨',
+                style: SwissType.label.copyWith(color: t.ink),
+              ),
+            ],
+          ),
+          backgroundColor: t.surfaceRaised,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(color: t.hairline, width: 1),
+          ),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   static Future<void> _export(BuildContext context) async {

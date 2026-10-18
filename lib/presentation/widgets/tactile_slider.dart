@@ -210,8 +210,83 @@ class SliderReadout extends StatelessWidget {
   }
 }
 
-/// The Now Playing seekbar: buffered band, playhead, and a drag preview so the
-/// user can read the exact target time before releasing.
+/// Custom track shape that removes default horizontal paddings so the seekbar spans
+/// edge-to-edge across its container.
+class SwissSeekBarTrackShape extends RoundedRectSliderTrackShape {
+  const SwissSeekBarTrackShape();
+
+  @override
+  Rect getPreferredRect({
+    required RenderBox parentBox,
+    Offset offset = Offset.zero,
+    required SliderThemeData sliderTheme,
+    bool isEnabled = false,
+    bool isDiscrete = false,
+  }) {
+    final trackHeight = sliderTheme.trackHeight ?? 4.0;
+    final trackLeft = offset.dx;
+    final trackTop = offset.dy + (parentBox.size.height - trackHeight) / 2;
+    final trackWidth = parentBox.size.width;
+    return Rect.fromLTWH(trackLeft, trackTop, trackWidth, trackHeight);
+  }
+}
+
+/// The Swiss bead thumb: ink shell around a canvas pip with subtle elevation.
+class SwissSliderThumbShape extends SliderComponentShape {
+  const SwissSliderThumbShape({
+    this.thumbRadius = 7.0,
+    this.pipRadius = 2.5,
+    required this.thumbColor,
+    required this.pipColor,
+  });
+
+  final double thumbRadius;
+  final double pipRadius;
+  final Color thumbColor;
+  final Color pipColor;
+
+  @override
+  Size getPreferredSize(bool isEnabled, bool isDiscrete) =>
+      Size.fromRadius(thumbRadius);
+
+  @override
+  void paint(
+    PaintingContext context,
+    Offset center, {
+    required Animation<double> activationAnimation,
+    required Animation<double> enableAnimation,
+    required bool isDiscrete,
+    required TextPainter labelPainter,
+    required RenderBox parentBox,
+    required SliderThemeData sliderTheme,
+    required TextDirection textDirection,
+    required double value,
+    required double textScaleFactor,
+    required Size sizeWithOverflow,
+  }) {
+    final canvas = context.canvas;
+    final dragging = activationAnimation.value > 0.05;
+    final radius = dragging ? thumbRadius + 1.5 : thumbRadius;
+
+    // Drop shadow
+    final shadowPaint = Paint()
+      ..color = Colors.black.withValues(alpha: dragging ? 0.35 : 0.18)
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, dragging ? 4.0 : 2.5);
+    canvas.drawCircle(center.translate(0, 1.2), radius, shadowPaint);
+
+    // Ink shell
+    final shellPaint = Paint()..color = thumbColor;
+    canvas.drawCircle(center, radius, shellPaint);
+
+    // Canvas pip
+    final pipPaint = Paint()..color = pipColor;
+    canvas.drawCircle(center, pipRadius, pipPaint);
+  }
+}
+
+/// The Now Playing seekbar: buffered band, playhead, and continuous drag preview.
+/// Powered by Flutter's Slider engine to guarantee uninterrupted dragging inside
+/// vertical scroll views.
 class TactileSeekBar extends StatefulWidget {
   const TactileSeekBar({
     required this.position,
@@ -235,119 +310,98 @@ class TactileSeekBar extends StatefulWidget {
 }
 
 class _TactileSeekBarState extends State<TactileSeekBar> {
-  double? _preview;
-
-  double get _fraction {
-    final total = widget.duration.inMilliseconds;
-    if (total <= 0) return 0;
-    final value = _preview ?? (widget.position.inMilliseconds / total);
-    return value.clamp(0.0, 1.0);
-  }
+  double? _dragMilliseconds;
 
   Duration get _displayed {
-    if (_preview == null) return widget.position;
-    return Duration(milliseconds: (widget.duration.inMilliseconds * _preview!).round());
+    if (_dragMilliseconds == null) return widget.position;
+    return Duration(milliseconds: _dragMilliseconds!.round());
   }
 
   @override
   Widget build(BuildContext context) {
     final t = SwissTokens.of(context);
-    final dragging = _preview != null;
+    final totalMs = widget.duration.inMilliseconds.toDouble();
+    final canSeek = widget.enabled && totalMs > 0;
+    final dragging = _dragMilliseconds != null;
+
+    final currentMs = canSeek
+        ? (_dragMilliseconds ?? widget.position.inMilliseconds.toDouble())
+            .clamp(0.0, totalMs)
+        : 0.0;
 
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final width = constraints.maxWidth;
-
-            void emit(double dx) {
-              if (width <= 0) return;
-              setState(() => _preview = (dx / width).clamp(0.0, 1.0));
-            }
-
-            return GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onHorizontalDragStart: (d) => emit(d.localPosition.dx),
-              onHorizontalDragUpdate: (d) => emit(d.localPosition.dx),
-              onHorizontalDragEnd: (_) {
-                final fraction = _preview;
-                setState(() => _preview = null);
-                if (fraction == null) return;
-                widget.onSeek(
-                  Duration(milliseconds: (widget.duration.inMilliseconds * fraction).round()),
-                );
-              },
-              onHorizontalDragCancel: () => setState(() => _preview = null),
-              onTapDown: (d) {
-                if (width <= 0) return;
-                final fraction = (d.localPosition.dx / width).clamp(0.0, 1.0);
-                widget.onSeek(
-                  Duration(milliseconds: (widget.duration.inMilliseconds * fraction).round()),
-                );
-              },
-              child: SizedBox(
-                height: 28,
-                child: Stack(
-                  alignment: Alignment.centerLeft,
-                  children: [
-                    Container(
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: t.hairlineStrong.withValues(alpha: 0.45),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                    FractionallySizedBox(
-                      widthFactor: widget.buffered.clamp(0.0, 1.0),
-                      alignment: Alignment.centerLeft,
-                      child: Container(
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: t.hairlineStrong,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ),
-                    FractionallySizedBox(
-                      widthFactor: _fraction,
-                      alignment: Alignment.centerLeft,
-                      child: Container(
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: widget.enabled ? t.accent : t.inkFaint,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ),
-                    // The bead: ink shell around a canvas pip.
-                    Align(
-                      alignment: Alignment(_fraction * 2 - 1, 0),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 80),
-                        width: dragging ? 18 : 14,
-                        height: dragging ? 18 : 14,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: widget.enabled ? t.ink : t.inkFaint,
-                          boxShadow: dragging ? t.raisedShadow : null,
-                        ),
-                        child: Center(
-                          child: Container(
-                            width: 5,
-                            height: 5,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: t.bg,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+        SizedBox(
+          height: 30,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // 1. Quiet background groove
+              Container(
+                height: 4,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: t.hairlineStrong.withValues(alpha: 0.45),
+                  borderRadius: BorderRadius.circular(2),
                 ),
               ),
-            );
-          },
+
+              // 2. Buffered progress band
+              FractionallySizedBox(
+                widthFactor: widget.buffered.clamp(0.0, 1.0),
+                alignment: Alignment.centerLeft,
+                child: Container(
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: t.hairlineStrong,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+
+              // 3. Fluid, scroll-proof Slider
+              SliderTheme(
+                data: SliderThemeData(
+                  trackHeight: 4,
+                  activeTrackColor: canSeek ? t.accent : t.inkFaint,
+                  inactiveTrackColor: Colors.transparent,
+                  overlayColor: t.accent.withValues(alpha: 0.16),
+                  overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+                  trackShape: const SwissSeekBarTrackShape(),
+                  thumbShape: SwissSliderThumbShape(
+                    thumbRadius: 7.0,
+                    pipRadius: 2.2,
+                    thumbColor: canSeek ? t.ink : t.inkFaint,
+                    pipColor: t.bg,
+                  ),
+                ),
+                child: Slider(
+                  value: currentMs,
+                  min: 0.0,
+                  max: canSeek ? totalMs : 1.0,
+                  onChangeStart: canSeek
+                      ? (val) {
+                          setState(() => _dragMilliseconds = val);
+                          Haptics.tap();
+                        }
+                      : null,
+                  onChanged: canSeek
+                      ? (val) {
+                          setState(() => _dragMilliseconds = val);
+                        }
+                      : null,
+                  onChangeEnd: canSeek
+                      ? (val) {
+                          setState(() => _dragMilliseconds = null);
+                          widget.onSeek(Duration(milliseconds: val.round()));
+                          Haptics.commit();
+                        }
+                      : null,
+                ),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: SwissGrid.xs),
         Row(
@@ -370,3 +424,4 @@ class _TactileSeekBarState extends State<TactileSeekBar> {
     );
   }
 }
+

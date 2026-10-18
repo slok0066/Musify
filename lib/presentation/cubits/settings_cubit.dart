@@ -191,6 +191,9 @@ class SettingsCubit extends Cubit<SettingsState> {
   void setVisualizer(VisualizerMode mode) =>
       _update(_settings.value.copyWith(visualizer: mode));
 
+  void setHasSeenCredits(bool value) =>
+      _update(_settings.value.copyWith(hasSeenCredits: value));
+
   // ----------------------------------------------------------------- storage
 
   Future<void> refreshStorage() async {

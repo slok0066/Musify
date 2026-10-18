@@ -434,6 +434,7 @@ class PlaybackService {
           ..reset()
           ..start();
       }
+      _bump();
     } catch (e) {
       debugPrint('seek failed: $e');
     }

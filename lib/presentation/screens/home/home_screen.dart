@@ -3,9 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/theme/swiss_tokens.dart';
 import '../../../core/theme/tactile_decorations.dart';
-import '../../../core/utils/formatters.dart';
 import '../../../data/datasources/jiosaavn_client.dart';
-import '../../../data/models/collection.dart';
 import '../../../data/models/track.dart';
 import '../../../services/service_locator.dart';
 import '../../../services/settings_service.dart';
@@ -152,12 +150,11 @@ class _Body extends StatelessWidget {
               child: RailSkeleton(count: 3, index: '01', title: 'LOADING')),
           const SliverToBoxAdapter(
               child: RailSkeleton(count: 3, index: '02', title: 'LOADING')),
-          const SliverToBoxAdapter(child: _GridSkeleton()),
         ],
         if (!loading) ...[
           if (state.filter == HomeFilter.all ||
               state.filter == HomeFilter.offline)
-            SliverToBoxAdapter(child: _QuickGrid(state: state)),
+            SliverToBoxAdapter(child: _QuickSongRail(state: state)),
           ..._sections(context, state),
           const SliverToBoxAdapter(child: _AudioOutputStrip()),
           const SliverToBoxAdapter(child: SizedBox(height: SwissGrid.xl)),
@@ -191,26 +188,9 @@ class _Body extends StatelessWidget {
     final player = context.read<PlayerCubit>();
 
     return [
-      _rail(
-        '02',
-        'CONTINUE LISTENING',
-        'PICKED UP WHERE YOU LEFT OFF',
-        [
-          for (final track in state.continueListening.take(12))
-            TrackCard(
-              track: track,
-              caption: Fmt.durationShort(track.duration),
-              onTap: () => player.playTrack(track,
-                  context: state.continueListening,
-                  source: 'CONTINUE LISTENING'),
-              onOptions: () => showTrackOptions(context, track,
-                  source: 'CONTINUE LISTENING'),
-            ),
-        ],
-      ),
       if (state.mixes.isNotEmpty)
         _rail(
-          '03',
+          '02',
           'MADE FOR YOU',
           'DAILY MIXES BUILT FROM YOUR HISTORY',
           [
@@ -221,10 +201,10 @@ class _Body extends StatelessWidget {
               ),
           ],
         ),
-      ..._catalogueSections(context, state, first: state.mixes.isEmpty ? '04' : '05'),
+      ..._catalogueSections(context, state, first: state.mixes.isEmpty ? '02' : '03'),
       if (state.cachedTracks.isNotEmpty)
         _rail(
-          '09',
+          '08',
           'RECENTLY CACHED',
           'THE ROLLING 500 MB STREAM CACHE',
           [
@@ -469,12 +449,8 @@ class _Body extends StatelessWidget {
             ),
         ],
       ),
-      const SliverToBoxAdapter(child: SizedBox(height: SwissGrid.md)),
-      SliverToBoxAdapter(
-          child: sectionHeader(ord(3), 'BROWSE GENRES', 'EIGHT CURATED TILES')),
-      SliverToBoxAdapter(child: _GenreGrid(genres: state.genres)),
       _rail(
-        ord(4),
+        ord(3),
         'MOOD PLAYLISTS',
         'CURATED BY THE CATALOGUE',
         [
@@ -581,187 +557,194 @@ class _SpatialBlurb extends StatelessWidget {
   }
 }
 
-/// The 2×3 quick-access grid: Liked Songs, the Offline Vault and the four most
-/// recent collections.
-class _QuickGrid extends StatelessWidget {
-  const _QuickGrid({required this.state});
+/// A sleek rectangular song card that slides horizontally.
+class SongRectangleCard extends StatelessWidget {
+  const SongRectangleCard({
+    required this.track,
+    required this.onTap,
+    this.onOptions,
+    this.width = 250,
+    super.key,
+  });
 
-  final HomeState state;
-
-  @override
-  Widget build(BuildContext context) {
-    if (state.quickCards.isEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        SwissGrid.gutter,
-        SwissGrid.lg,
-        SwissGrid.gutter,
-        SwissGrid.sm,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text(
-                'JUMP BACK IN',
-                style: SwissType.label.copyWith(
-                  color: SwissTokens.of(context).ink,
-                  letterSpacing: 1.2,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                '${state.quickCards.length} ITEMS',
-                style: SwissType.micro.copyWith(
-                  color: SwissTokens.of(context).inkFaint,
-                  letterSpacing: 0.5,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: SwissGrid.md),
-          GridView.builder(
-            shrinkWrap: true,
-            padding: EdgeInsets.zero,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: state.quickCards.length,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              mainAxisSpacing: SwissGrid.sm,
-              crossAxisSpacing: SwissGrid.sm,
-              mainAxisExtent: 62,
-            ),
-            itemBuilder: (context, i) =>
-                _QuickCardTile(card: state.quickCards[i]),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _QuickCardTile extends StatelessWidget {
-  const _QuickCardTile({required this.card});
-
-  final QuickCard card;
+  final Track track;
+  final VoidCallback onTap;
+  final VoidCallback? onOptions;
+  final double width;
 
   @override
   Widget build(BuildContext context) {
     final t = SwissTokens.of(context);
 
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () {
-        Haptics.tap();
-        switch (card.kind) {
-          case QuickKind.liked:
-            openCollection(
-              context,
-              Collection(
-                id: '__liked__',
-                title: 'LIKED SONGS',
-                kind: CollectionKind.system,
-                subtitle: card.subtitle,
-                imageUrl: card.imageUrl,
+    return SizedBox(
+      width: width,
+      height: 68,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          Haptics.tap();
+          onTap();
+        },
+        onLongPress: () {
+          Haptics.commit();
+          onOptions?.call();
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: t.surfaceRaised,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: t.hairline, width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.08),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
               ),
-              tracks: context.read<HomeCubit>().state.liked,
-            );
-          case QuickKind.downloads:
-            openCollection(
-              context,
-              Collection(
-                id: '__downloads__',
-                title: 'OFFLINE VAULT',
-                kind: CollectionKind.system,
-                subtitle: card.subtitle,
-                imageUrl: card.imageUrl,
+            ],
+          ),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: SwissArtwork(
+                  imageUrl: track.imageUrl,
+                  size: 52,
+                  radius: 10,
+                  placeholderIcon: Icons.music_note,
+                ),
               ),
-              tracks: context.read<HomeCubit>().state.downloads,
-            );
-          case QuickKind.collection:
-            final collection = card.collection;
-            if (collection != null) openCollection(context, collection);
-        }
-      },
-      child: Container(
-        decoration: BoxDecoration(
-          color: t.surfaceRaised,
-          border: Border.all(color: t.hairline, width: 1),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-        child: Row(
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Stack(
-                children: [
-                  SizedBox(
-                    width: 44,
-                    height: 44,
-                    child: card.mosaic.isNotEmpty
-                        ? MosaicArtwork(urls: card.mosaic, size: 44, radius: 8)
-                        : SwissArtwork(imageUrl: card.imageUrl, size: 44, radius: 8),
-                  ),
-                  if (card.kind == QuickKind.liked)
-                    Positioned.fill(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: t.accent.withValues(alpha: 0.35),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Center(
-                          child: Icon(Icons.favorite, size: 18, color: t.ink),
-                        ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      track.title,
+                      style: SwissType.bodySm.copyWith(
+                        color: t.ink,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  if (card.kind == QuickKind.downloads)
-                    Positioned.fill(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: t.accent.withValues(alpha: 0.35),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Center(
-                          child: Icon(Icons.download_for_offline, size: 18, color: t.ink),
-                        ),
+                    const SizedBox(height: 3),
+                    Text(
+                      track.displayArtist,
+                      style: SwissType.micro.copyWith(
+                        color: t.inkMuted,
+                        fontSize: 10.5,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    card.title,
-                    style: SwissType.bodySm.copyWith(
-                      color: t.ink,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.1,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    card.subtitle,
-                    style: SwissType.micro.copyWith(color: t.inkMuted),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+              const SizedBox(width: 8),
+              Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: t.surfaceSunken,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: t.hairline, width: 0.8),
+                ),
+                child: Center(
+                  child: Icon(Icons.play_arrow_rounded, size: 18, color: t.accent),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
+      ),
+    );
+  }
+}
+
+/// Horizontal sliding rail of rectangular song cards.
+class _QuickSongRail extends StatelessWidget {
+  const _QuickSongRail({required this.state});
+
+  final HomeState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final player = context.read<PlayerCubit>();
+    final candidateTracks = state.continueListening.isNotEmpty
+        ? state.continueListening
+        : (state.topSearches.isNotEmpty
+            ? state.topSearches
+            : state.trending
+                .where((item) => item.isTrack)
+                .map((item) => item.track!)
+                .toList());
+
+    if (candidateTracks.isEmpty) return const SizedBox.shrink();
+
+    final songs = candidateTracks.take(16).toList();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: SwissGrid.md, bottom: SwissGrid.xs),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: SwissGrid.gutter),
+            child: Row(
+              children: [
+                Text(
+                  'QUICK PICKS',
+                  style: SwissType.label.copyWith(
+                    color: SwissTokens.of(context).ink,
+                    letterSpacing: 1.2,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  'SLIDE FOR MORE',
+                  style: SwissType.micro.copyWith(
+                    color: SwissTokens.of(context).accent,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: SwissGrid.sm),
+          SizedBox(
+            height: 72,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: SwissGrid.gutter),
+              itemCount: songs.length,
+              separatorBuilder: (_, __) => const SizedBox(width: SwissGrid.sm),
+              itemBuilder: (context, i) {
+                final track = songs[i];
+                return SongRectangleCard(
+                  track: track,
+                  onTap: () => player.playTrack(
+                    track,
+                    context: songs,
+                    source: 'QUICK PICKS',
+                  ),
+                  onOptions: () => showTrackOptions(
+                    context,
+                    track,
+                    source: 'QUICK PICKS',
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -840,65 +823,3 @@ class _AudioOutputStrip extends StatelessWidget {
   }
 }
 
-class _GenreGrid extends StatelessWidget {
-  const _GenreGrid({required this.genres});
-
-  final List<Collection> genres;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: SwissGrid.gutter),
-      child: GridView.builder(
-        shrinkWrap: true,
-        padding: EdgeInsets.zero,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: genres.length,
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          mainAxisSpacing: SwissGrid.md,
-          crossAxisSpacing: SwissGrid.md,
-          childAspectRatio: 0.86,
-        ),
-        itemBuilder: (context, i) => CollectionGridTile(
-          title: genres[i].title,
-          subtitle: genres[i].subtitle,
-          imageUrl: genres[i].imageUrl,
-          ordinal: '${i + 1}'.padLeft(2, '0'),
-          onTap: () => openCollection(context, genres[i]),
-        ),
-      ),
-    );
-  }
-}
-
-class _GridSkeleton extends StatelessWidget {
-  const _GridSkeleton();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(SwissGrid.gutter),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SwissSkeleton(height: 11, width: 120),
-          const SizedBox(height: SwissGrid.md),
-          GridView.builder(
-            shrinkWrap: true,
-            padding: EdgeInsets.zero,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: 4,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              mainAxisSpacing: SwissGrid.md,
-              crossAxisSpacing: SwissGrid.md,
-              childAspectRatio: 0.86,
-            ),
-            itemBuilder: (_, __) => const SwissSkeleton(height: 180),
-          ),
-        ],
-      ),
-    );
-  }
-}

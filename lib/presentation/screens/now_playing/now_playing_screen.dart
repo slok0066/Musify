@@ -601,13 +601,13 @@ class _StripSegment extends StatelessWidget {
 /// The seek readout, isolated so only it repaints with the position timer.
 class _SeekSection extends StatelessWidget {
   const _SeekSection({
-    required this.enabled,
-    required this.buffered,
     required this.onSeek,
+    this.enabled,
+    this.buffered,
   });
 
-  final bool enabled;
-  final double buffered;
+  final bool? enabled;
+  final double? buffered;
   final ValueChanged<Duration> onSeek;
 
   @override
@@ -616,17 +616,20 @@ class _SeekSection extends StatelessWidget {
       buildWhen: (previous, next) =>
           previous.position != next.position ||
           previous.duration != next.duration ||
-          previous.buffered != next.buffered,
+          previous.buffered != next.buffered ||
+          previous.canSeek != next.canSeek ||
+          previous.bufferedFraction != next.bufferedFraction,
       builder: (context, state) => TactileSeekBar(
         position: state.position,
         duration: state.duration,
-        buffered: buffered,
-        enabled: enabled,
+        buffered: state.bufferedFraction,
+        enabled: state.canSeek,
         onSeek: onSeek,
       ),
     );
   }
 }
+
 
 
 class _Banner extends StatelessWidget {

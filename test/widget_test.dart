@@ -4,7 +4,9 @@ import 'package:musify/core/theme/app_theme.dart';
 import 'package:musify/core/theme/swiss_tokens.dart';
 import 'package:musify/core/theme/tactile_decorations.dart';
 import 'package:musify/core/utils/formatters.dart';
+import 'package:musify/presentation/screens/credits/full_credit_screen.dart';
 import 'package:musify/presentation/widgets/collection_cards.dart';
+import 'package:musify/presentation/widgets/tactile_slider.dart';
 
 /// These are the tests that must stay green without a device, a network or an
 /// audio engine: the formatting contract the whole UI reads from, and the
@@ -214,5 +216,62 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('EMPTY RAIL'), findsNothing);
     expect(find.text('POPULATED RAIL'), findsOneWidget);
+  });
+
+  testWidgets('TactileSeekBar renders correctly and triggers onSeek',
+      (tester) async {
+    Duration? sought;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildMusifyTheme(SwissTokens.carbon),
+        home: Scaffold(
+          body: Padding(
+            padding: const EdgeInsets.all(16),
+            child: TactileSeekBar(
+              position: const Duration(seconds: 30),
+              duration: const Duration(seconds: 120),
+              buffered: 0.5,
+              enabled: true,
+              onSeek: (target) => sought = target,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('00:30'), findsOneWidget);
+    expect(find.text('02:00'), findsOneWidget);
+    expect(find.byType(Slider), findsOneWidget);
+
+    // Tap somewhere on the slider track
+    final slider = find.byType(Slider);
+    await tester.tap(slider);
+    await tester.pumpAndSettle();
+
+    expect(sought, isNotNull);
+  });
+
+  testWidgets('FullCreditScreen renders creator info and calls onDismiss',
+      (tester) async {
+    var dismissed = false;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildMusifyTheme(SwissTokens.carbon),
+        home: FullCreditScreen(
+          onDismiss: () => dismissed = true,
+        ),
+      ),
+    );
+
+    expect(find.text('Created by a human being called Shlok'), findsOneWidget);
+    expect(find.text('@king_togetherness'), findsOneWidget);
+    expect(find.text('ENTER MUSIFY'), findsOneWidget);
+
+    await tester.tap(find.text('ENTER MUSIFY'));
+    await tester.pumpAndSettle();
+
+    expect(dismissed, isTrue);
   });
 }

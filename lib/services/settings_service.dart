@@ -79,6 +79,7 @@ class MusifySettings {
     this.visualizer = VisualizerMode.fft,
     this.prefetchNext = true,
     this.instantStart = true,
+    this.hasSeenCredits = false,
   });
 
   static const List<double> flatGains = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
@@ -116,6 +117,9 @@ class MusifySettings {
   /// start, useful for ruling this feature out when something sounds wrong.
   final bool instantStart;
 
+  /// True once the one-time first launch credits page has been dismissed.
+  final bool hasSeenCredits;
+
   AudioQuality get effectiveStreamQuality => wifiQuality;
 
   bool get is8DCustomised =>
@@ -140,6 +144,7 @@ class MusifySettings {
     VisualizerMode? visualizer,
     bool? prefetchNext,
     bool? instantStart,
+    bool? hasSeenCredits,
   }) {
     return MusifySettings(
       wifiQuality: wifiQuality ?? this.wifiQuality,
@@ -160,6 +165,7 @@ class MusifySettings {
       visualizer: visualizer ?? this.visualizer,
       prefetchNext: prefetchNext ?? this.prefetchNext,
       instantStart: instantStart ?? this.instantStart,
+      hasSeenCredits: hasSeenCredits ?? this.hasSeenCredits,
     );
   }
 
@@ -182,6 +188,7 @@ class MusifySettings {
     'visualizer': visualizer.name,
     'prefetchNext': prefetchNext,
     'instantStart': instantStart,
+    'hasSeenCredits': hasSeenCredits,
   };
 
   static MusifySettings fromMap(Map<String, dynamic> map) {
@@ -239,6 +246,7 @@ class MusifySettings {
       visualizer: enumAt('visualizer', VisualizerMode.values, VisualizerMode.fft),
       prefetchNext: boolAt('prefetchNext', true),
       instantStart: boolAt('instantStart', true),
+      hasSeenCredits: boolAt('hasSeenCredits', false),
     );
   }
 
