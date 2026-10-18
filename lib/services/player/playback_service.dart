@@ -124,6 +124,7 @@ class PlaybackService {
   AudioSource? _incomingSource;
   SoundHandle? _incomingHandle;
   Timer? _positionTimer;
+  DateTime? _seekSuppressedUntil;
   Timer? _crossfadeTimer;
   Timer? _sleepTimer;
   Timer? _orbitTimer;
@@ -419,24 +420,122 @@ class PlaybackService {
 
   Future<void> seek(Duration target) async {
     if (_crossfading) _abortCrossfade();
-    final handle = _handle;
-    if (!_live(handle)) return;
     final total = duration.value;
     var clamped = target;
     if (total > Duration.zero && clamped > total) clamped = total;
     if (clamped < Duration.zero) clamped = Duration.zero;
-    try {
-      _soloud.seek(handle!, clamped);
-      position.value = clamped;
-      if (is8DEnabled.value) {
-        _orbitClock
-          ..stop()
-          ..reset()
-          ..start();
+
+    _seekSuppressedUntil = DateTime.now().add(const Duration(milliseconds: 750));
+    position.value = clamped;
+    _bump();
+
+    final track = currentTrack.value;
+    if (_streaming && track != null) {
+      // Progressive pull buffer streams cannot seek natively in SoLoud.
+      // Transition immediately to the complete cached disk file.
+      var path = _streamSession?.path ?? _completedPath?.call(track);
+      if (path == null) {
+        final session = _streamSession;
+        if (session != null) {
+          final deadline = DateTime.now().add(const Duration(milliseconds: 1000));
+          while (!session.isComplete && DateTime.now().isBefore(deadline)) {
+            await Future<void>.delayed(const Duration(milliseconds: 40));
+          }
+          path = session.path;
+        }
       }
+      if (path == null) {
+        final resolved = await _resolveFor(track);
+        if (resolved != null && resolved.isLocalFile) {
+          path = resolved.path;
+        }
+      }
+
+      if (path != null && path.isNotEmpty) {
+        await _switchToLocalFile(path, seekTo: clamped);
+        return;
+      }
+    }
+
+    final handle = _handle;
+    if (_live(handle)) {
+      try {
+        _soloud.seek(handle!, clamped);
+        if (is8DEnabled.value) {
+          _orbitClock
+            ..stop()
+            ..reset()
+            ..start();
+        }
+      } catch (e) {
+        debugPrint('seek failed: $e');
+      }
+    }
+  }
+
+  /// Migrates an active voice from an unseekable progressive stream to a complete
+  /// seekable disk file, seamlessly positioning at [seekTo].
+  Future<void> _switchToLocalFile(String path, {required Duration seekTo}) async {
+    try {
+      final loaded = await _soloud.loadFile(path, mode: LoadMode.disk);
+      if (_disposed) {
+        await _soloud.disposeSource(loaded);
+        return;
+      }
+
+      final oldHandle = _handle;
+      final oldSource = _source;
+      final oldSession = _streamSession;
+
+      _streamSession = null;
+      _streamIndex = null;
+      _streaming = false;
+      _streamWatchdog?.cancel();
+      _streamWatchdog = null;
+
+      final handle = _soloud.play3d(loaded, 0, 0, 1, volume: 1);
+      _source = loaded;
+      _handle = handle;
+
+      if (_live(handle)) {
+        _soloud.set3dSourceMinMaxDistance(handle, 1, 8);
+        _soloud.set3dSourceAttenuation(handle, 1, 1);
+        if (is8DEnabled.value) _apply8DToActiveVoice();
+
+        _finishSub?.cancel();
+        _finishSub = loaded.allInstancesFinished.listen((_) => _onNaturalFinish());
+
+        _soloud.seek(handle, seekTo);
+        position.value = seekTo;
+        final length = _soloud.getLength(loaded);
+        if (length > Duration.zero) duration.value = length;
+        buffered.value = duration.value;
+        bufferFraction.value = 1.0;
+
+        if (is8DEnabled.value) {
+          _orbitClock
+            ..stop()
+            ..reset()
+            ..start();
+        }
+      }
+
+      if (_live(oldHandle)) {
+        try {
+          _soloud.stop(oldHandle!);
+        } catch (_) {}
+      }
+      if (oldSource != null) {
+        try {
+          await _soloud.disposeSource(oldSource);
+        } catch (_) {}
+      }
+      oldSession?.release();
+
+      _seekSuppressedUntil = DateTime.now().add(const Duration(milliseconds: 600));
       _bump();
     } catch (e) {
-      debugPrint('seek failed: $e');
+      debugPrint('_switchToLocalFile failed: $e');
     }
   }
 
@@ -1058,6 +1157,9 @@ class PlaybackService {
     _positionTimer?.cancel();
     _positionTimer = Timer.periodic(const Duration(milliseconds: 250), (_) {
       if (_disposed) return;
+      if (_seekSuppressedUntil != null && DateTime.now().isBefore(_seekSuppressedUntil!)) {
+        return;
+      }
       final handle = _handle;
       if (!_live(handle)) return;
       try {
@@ -1094,6 +1196,14 @@ class PlaybackService {
     if (source == null) return;
     final total = duration.value;
     try {
+      final session = _streamSession;
+      if (session != null && session.isComplete) {
+        final path = session.path;
+        if (path != null && path.isNotEmpty) {
+          _switchToLocalFile(path, seekTo: position.value);
+          return;
+        }
+      }
       final range = _soloud.getPullBufferTimeRange(source);
       buffered.value = range.endTime;
       if (total > Duration.zero) {

@@ -173,7 +173,7 @@ void configureDependencies() {
       importer: locator<PlaylistImporter>(),
     ),
   );
-  locator.registerFactory<SettingsCubit>(
+  locator.registerLazySingleton<SettingsCubit>(
     () => SettingsCubit(
       settings: locator<SettingsService>(),
       music: locator<MusicRepository>(),

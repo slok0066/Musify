@@ -30,7 +30,11 @@ class MainShellScreen extends StatelessWidget {
     );
 
     if (!hasSeenCredits) {
-      return const FullCreditScreen();
+      return FullCreditScreen(
+        onDismiss: () {
+          context.read<SettingsCubit>().setHasSeenCredits(true);
+        },
+      );
     }
 
     return BlocListener<LibraryCubit, LibraryState>(

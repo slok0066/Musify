@@ -1,8 +1,8 @@
 {
-  "version": "1.0.6",
-  "build": 7,
-  "release_notes": "• Taller cinematic poster card on Home screen\n• Crystal-clear 500x500 high-resolution artwork upgrade\n• Live dynamic trending and chart-topping famous hits featured on Home\n• In-app seamless direct APK update download and auto-installer",
-  "download_url": "https://github.com/slok0066/Musify/releases/download/v1.0.6/app-arm64-v8a-release.apk",
-  "apk_url": "https://github.com/slok0066/Musify/releases/download/v1.0.6/app-arm64-v8a-release.apk",
+  "version": "1.0.7",
+  "build": 8,
+  "release_notes": "• Bigger, taller cinematic featured song poster cards on Home screen\n• First-install-only Credit screen (never repeatedly displayed on reopen)\n• Real-time, responsive song slider (scrubber) seeking in Player\n• Cleaned up Credit screen typography\n• In-app seamless direct APK download and auto-installer",
+  "download_url": "https://github.com/slok0066/Musify/releases/download/v1.0.7/app-arm64-v8a-release.apk",
+  "apk_url": "https://github.com/slok0066/Musify/releases/download/v1.0.7/app-arm64-v8a-release.apk",
   "mandatory": false
 }

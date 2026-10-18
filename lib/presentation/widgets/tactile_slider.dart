@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../core/theme/swiss_tokens.dart';
@@ -311,10 +313,32 @@ class TactileSeekBar extends StatefulWidget {
 
 class _TactileSeekBarState extends State<TactileSeekBar> {
   double? _dragMilliseconds;
+  Timer? _seekDebounceTimer;
 
   Duration get _displayed {
-    if (_dragMilliseconds == null) return widget.position;
-    return Duration(milliseconds: _dragMilliseconds!.round());
+    if (_dragMilliseconds != null) {
+      return Duration(milliseconds: _dragMilliseconds!.round());
+    }
+    return widget.position;
+  }
+
+  @override
+  void didUpdateWidget(TactileSeekBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_dragMilliseconds != null) {
+      final diff = (widget.position.inMilliseconds - _dragMilliseconds!).abs();
+      // If position has synced within 400ms of seeked target, release drag lock early
+      if (diff < 400) {
+        _seekDebounceTimer?.cancel();
+        _dragMilliseconds = null;
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _seekDebounceTimer?.cancel();
+    super.dispose();
   }
 
   @override
@@ -382,20 +406,28 @@ class _TactileSeekBarState extends State<TactileSeekBar> {
                   max: canSeek ? totalMs : 1.0,
                   onChangeStart: canSeek
                       ? (val) {
+                          _seekDebounceTimer?.cancel();
                           setState(() => _dragMilliseconds = val);
                           Haptics.tap();
                         }
                       : null,
                   onChanged: canSeek
                       ? (val) {
+                          _seekDebounceTimer?.cancel();
                           setState(() => _dragMilliseconds = val);
                         }
                       : null,
                   onChangeEnd: canSeek
                       ? (val) {
-                          setState(() => _dragMilliseconds = null);
+                          setState(() => _dragMilliseconds = val);
                           widget.onSeek(Duration(milliseconds: val.round()));
                           Haptics.commit();
+                          _seekDebounceTimer?.cancel();
+                          _seekDebounceTimer = Timer(const Duration(milliseconds: 750), () {
+                            if (mounted) {
+                              setState(() => _dragMilliseconds = null);
+                            }
+                          });
                         }
                       : null,
                 ),

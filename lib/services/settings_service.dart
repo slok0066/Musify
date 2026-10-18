@@ -271,6 +271,8 @@ class SettingsService extends ValueNotifier<MusifySettings> {
 
   static const String _key = 'musify.settings.v1';
 
+  static const String seenCreditsKey = 'musify_has_seen_credits_installed';
+
   SharedPreferences? _prefs;
 
   /// Hydrates from disk. Guarded by the caller's startup timeout, so a missing
@@ -278,7 +280,12 @@ class SettingsService extends ValueNotifier<MusifySettings> {
   Future<void> load() async {
     try {
       _prefs = await SharedPreferences.getInstance();
-      value = MusifySettings.fromJson(_prefs?.getString(_key));
+      var loaded = MusifySettings.fromJson(_prefs?.getString(_key));
+      final seenFlag = _prefs?.getBool(seenCreditsKey) ?? false;
+      if (seenFlag && !loaded.hasSeenCredits) {
+        loaded = loaded.copyWith(hasSeenCredits: true);
+      }
+      value = loaded;
     } catch (e) {
       debugPrint('SettingsService.load failed, using defaults: $e');
       value = const MusifySettings();
@@ -299,6 +306,9 @@ class SettingsService extends ValueNotifier<MusifySettings> {
     try {
       _prefs ??= await SharedPreferences.getInstance();
       await _prefs?.setString(_key, value.toJson());
+      if (value.hasSeenCredits) {
+        await _prefs?.setBool(seenCreditsKey, true);
+      }
     } catch (e) {
       debugPrint('SettingsService persist failed: $e');
     }
