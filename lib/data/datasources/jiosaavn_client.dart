@@ -700,11 +700,13 @@ class JioSaavnClient {
   /// `-150x150.jpg` → `-500x500.jpg`. The CDN serves any square size and the
   /// catalogue only ever advertises the thumbnail.
   static String hires(String url, {int size = 500}) {
-    if (url.isEmpty) return '';
-    return url.replaceAllMapped(
-      RegExp(r'(\d+)x(\d+)\.(jpg|jpeg|png|webp)$', caseSensitive: false),
-      (_) => '${size}x$size.${RegExp(r'\.(jpg|jpeg|png|webp)$', caseSensitive: false).firstMatch(url)?.group(1)?.toLowerCase() ?? 'jpg'}',
+    if (url.trim().isEmpty) return '';
+    var clean = url.trim().replaceAll('http://', 'https://');
+    clean = clean.replaceAllMapped(
+      RegExp(r'(\d+)x(\d+)(\.(jpg|jpeg|png|webp))', caseSensitive: false),
+      (match) => '${size}x$size${match.group(3)}',
     );
+    return clean;
   }
 
   /// Swaps the rendition suffix: `…_96.mp4` → `…_320.mp4`.

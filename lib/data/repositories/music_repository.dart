@@ -24,6 +24,7 @@ class HomeFeed {
     this.albums = const [],
     this.genres = const [],
     this.topSearches = const [],
+    this.featuredHits = const [],
     this.isOffline = false,
     this.hasData = false,
   });
@@ -34,6 +35,7 @@ class HomeFeed {
   final List<RailItem> albums;
   final List<Collection> genres;
   final List<Track> topSearches;
+  final List<Track> featuredHits;
 
   /// True when the device has no transport — Home swaps its rails for the
   /// local vault instead of showing an error.
@@ -309,6 +311,7 @@ class MusicRepository {
 
     final payload = await _saavn.fetchLaunch(refresh: refresh);
     final topSearches = await _saavn.fetchTopSearches();
+    final featuredHits = await _fetchFeaturedHits(payload);
 
     return HomeFeed(
       trending: payload.trending,
@@ -317,9 +320,69 @@ class MusicRepository {
       albums: payload.albums,
       genres: payload.genres,
       topSearches: topSearches,
+      featuredHits: featuredHits,
       isOffline: false,
-      hasData: !payload.isEmpty || topSearches.isNotEmpty,
+      hasData: !payload.isEmpty || topSearches.isNotEmpty || featuredHits.isNotEmpty,
     );
+  }
+
+  Future<List<Track>> _fetchFeaturedHits(LaunchPayload payload) async {
+    final hits = <Track>[];
+    final seen = <String>{};
+
+    void addTrack(Track? t) {
+      if (t == null || t.id.isEmpty) return;
+      if (seen.add(t.dedupeKey)) {
+        hits.add(t);
+      }
+    }
+
+    try {
+      // 1. Fetch tracks from the top trending playlists/charts
+      final collectionsToExamine = <Collection>[];
+      for (final item in payload.trending) {
+        if (item.isCollection && item.collection != null && collectionsToExamine.length < 2) {
+          collectionsToExamine.add(item.collection!);
+        }
+      }
+      for (final item in payload.charts) {
+        if (item.isCollection && item.collection != null && collectionsToExamine.length < 4) {
+          collectionsToExamine.add(item.collection!);
+        }
+      }
+
+      for (final col in collectionsToExamine) {
+        try {
+          final detail = await _saavn.playlistDetail(col, maxTracks: 15);
+          if (detail != null && detail.tracks.isNotEmpty) {
+            for (final track in detail.tracks) {
+              addTrack(track);
+            }
+          }
+        } catch (_) {}
+        if (hits.length >= 20) break;
+      }
+
+      // 2. Query latest trending songs directly from search if still needed
+      if (hits.length < 15) {
+        final queryResults = await _saavn.searchSongs('trending hits', limit: 25);
+        for (final track in queryResults) {
+          addTrack(track);
+        }
+      }
+
+      // 3. Fallback: Include topSearches
+      if (hits.length < 15) {
+        final top = await _saavn.fetchTopSearches();
+        for (final track in top) {
+          addTrack(track);
+        }
+      }
+    } catch (e) {
+      debugPrint('Failed to fetch featured hits: $e');
+    }
+
+    return hits;
   }
 
   /// The eight curated genre tiles, with a hard-coded fallback so Search is

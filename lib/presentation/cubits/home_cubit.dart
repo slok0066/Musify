@@ -97,6 +97,8 @@ class HomeState extends Equatable {
 
   List<Track> get topSearches => feed.topSearches;
 
+  List<Track> get featuredHits => feed.featuredHits;
+
   HomeState copyWith({
     HomeStatus? status,
     HomeFeed? feed,
