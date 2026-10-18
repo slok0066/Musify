@@ -1,7 +1,8 @@
 {
   "version": "1.0.5",
   "build": 6,
-  "release_notes": "• Taller cinematic auto-sliding poster carousel for trending hits\n• Seamless Instagram deep-linking to @king_togetherness\n• Player seekbar smoothness and touch optimizations\n• Performance polish and lossless audio streaming fixes",
-  "download_url": "https://github.com/slok0066/Musify/releases/latest",
+  "release_notes": "• In-app seamless direct update installation\n• Taller cinematic auto-sliding poster carousel for trending hits\n• Seamless Instagram deep-linking to @king_togetherness\n• Player seekbar smoothness and touch optimizations",
+  "download_url": "https://github.com/slok0066/Musify/releases/download/v1.0.5/app-arm64-v8a-release.apk",
+  "apk_url": "https://github.com/slok0066/Musify/releases/download/v1.0.5/app-arm64-v8a-release.apk",
   "mandatory": false
 }

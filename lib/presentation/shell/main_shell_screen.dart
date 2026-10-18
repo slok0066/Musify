@@ -82,7 +82,7 @@ class _Chassis extends StatefulWidget {
   State<_Chassis> createState() => _ChassisState();
 }
 
-class _ChassisState extends State<_Chassis> {
+class _ChassisState extends State<_Chassis> with WidgetsBindingObserver {
   /// In-app navigation happens here, on a navigator *inside* the chassis, and
   /// not on the root one.
   ///
@@ -95,9 +95,24 @@ class _ChassisState extends State<_Chassis> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkUpdateSilently();
     });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      locator<UpdateService>().resetDismissed();
+      _checkUpdateSilently();
+    }
   }
 
   Future<void> _checkUpdateSilently() async {
