@@ -134,6 +134,7 @@ class _Face extends StatelessWidget {
                                 radius: SwissTokens.radiusLg,
                                 placeholderIcon: Icons.music_note,
                                 heroTag: 'musify-artwork',
+                                filterQuality: FilterQuality.high,
                               ),
                               if (state.is8D)
                                 Positioned(

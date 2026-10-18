@@ -19,6 +19,7 @@ class SettingsState extends Equatable {
     this.busy = false,
     this.message,
     this.isUnmetered = false,
+    this.loaded = false,
   });
 
   final MusifySettings settings;
@@ -30,6 +31,10 @@ class SettingsState extends Equatable {
   /// One-shot message for the snackbar.
   final String? message;
   final bool isUnmetered;
+
+  /// True once the settings store has actually been read. Guards decisions that
+  /// must not act on the defaults — the first-install credits page above all.
+  final bool loaded;
 
   String get qualityLine => isUnmetered
       ? 'WI-FI · ${settings.wifiQuality.label}'
@@ -44,6 +49,7 @@ class SettingsState extends Equatable {
     String? message,
     bool clearMessage = false,
     bool? isUnmetered,
+    bool? loaded,
   }) {
     return SettingsState(
       settings: settings ?? this.settings,
@@ -53,6 +59,7 @@ class SettingsState extends Equatable {
       busy: busy ?? this.busy,
       message: clearMessage ? null : (message ?? this.message),
       isUnmetered: isUnmetered ?? this.isUnmetered,
+      loaded: loaded ?? this.loaded,
     );
   }
 
@@ -65,6 +72,7 @@ class SettingsState extends Equatable {
     busy,
     message,
     isUnmetered,
+    loaded,
   ];
 }
 
@@ -86,7 +94,10 @@ class SettingsCubit extends Cubit<SettingsState> {
         _backup = backup,
         _player = player,
         _network = network,
-        super(SettingsState(settings: settings.value)) {
+        super(SettingsState(
+          settings: settings.value,
+          loaded: settings.isLoaded,
+        )) {
     _settings.addListener(_onSettingsChanged);
     _network.isUnmetered.addListener(_onTransportChanged);
     Haptics.enabled = settings.value.hapticsEnabled;
@@ -103,7 +114,10 @@ class SettingsCubit extends Cubit<SettingsState> {
   void _onSettingsChanged() {
     if (isClosed) return;
     Haptics.enabled = _settings.value.hapticsEnabled;
-    emit(state.copyWith(settings: _settings.value));
+    emit(state.copyWith(
+      settings: _settings.value,
+      loaded: _settings.isLoaded,
+    ));
   }
 
   void _onTransportChanged() {
@@ -249,7 +263,11 @@ class SettingsCubit extends Cubit<SettingsState> {
     emit(state.copyWith(busy: true));
     final result = await _backup.importFromJson(json);
     if (isClosed) return result;
-    emit(state.copyWith(busy: false, settings: _settings.value));
+    emit(state.copyWith(
+      busy: false,
+      settings: _settings.value,
+      loaded: _settings.isLoaded,
+    ));
     await refreshStorage();
     _message(result.message.toUpperCase());
     return result;

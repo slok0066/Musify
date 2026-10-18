@@ -25,11 +25,19 @@ class MainShellScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasSeenCredits = context.select<SettingsCubit, bool>(
-      (c) => c.state.settings.hasSeenCredits,
+    final gate = context.select<SettingsCubit, ({bool loaded, bool seen})>(
+      (c) => (
+        loaded: c.state.loaded,
+        seen: c.state.settings.hasSeenCredits,
+      ),
     );
 
-    if (!hasSeenCredits) {
+    // The welcome page is only ever shown once the settings store has been
+    // read and still says this is a first install. A slow or failed load used
+    // to look exactly like a first install — defaults report
+    // `hasSeenCredits == false` — which is how the page could appear on every
+    // launch. Now an unread store shows the app instead, never the page.
+    if (gate.loaded && !gate.seen) {
       return FullCreditScreen(
         onDismiss: () {
           context.read<SettingsCubit>().setHasSeenCredits(true);

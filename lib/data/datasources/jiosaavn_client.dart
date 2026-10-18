@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:pointycastle/export.dart';
 
+import '../../core/artwork_url.dart';
 import '../../core/utils/formatters.dart';
 import '../models/collection.dart';
 import '../models/track.dart';
@@ -697,17 +698,10 @@ class JioSaavnClient {
 
   // ------------------------------------------------------------------ helpers
 
-  /// `-150x150.jpg` → `-500x500.jpg`. The CDN serves any square size and the
-  /// catalogue only ever advertises the thumbnail.
-  static String hires(String url, {int size = 500}) {
-    if (url.trim().isEmpty) return '';
-    var clean = url.trim().replaceAll('http://', 'https://');
-    clean = clean.replaceAllMapped(
-      RegExp(r'(\d+)x(\d+)(\.(jpg|jpeg|png|webp))', caseSensitive: false),
-      (match) => '${size}x$size${match.group(3)}',
-    );
-    return clean;
-  }
+  /// `-150x150.jpg` → `-500x500.jpg`. The CDN serves any square size up to 500
+  /// and the catalogue only ever advertises the thumbnail.
+  static String hires(String url, {int size = 500}) =>
+      hiresArtwork(url, size: size);
 
   /// Swaps the rendition suffix: `…_96.mp4` → `…_320.mp4`.
   ///

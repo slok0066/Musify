@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/artwork_url.dart';
 import '../../core/theme/swiss_tokens.dart';
 import '../../core/theme/tactile_decorations.dart';
 
@@ -19,6 +20,7 @@ class SwissArtwork extends StatelessWidget {
     this.showBorder = true,
     this.placeholderIcon = Icons.album_outlined,
     this.heroTag,
+    this.filterQuality = FilterQuality.medium,
     super.key,
   });
 
@@ -30,12 +32,22 @@ class SwissArtwork extends StatelessWidget {
   final IconData placeholderIcon;
   final Object? heroTag;
 
+  /// `medium` is the floor everywhere; a cover shown as a large plate (Now
+  /// Playing) asks for `high`, because low-quality resampling is exactly what
+  /// makes an upscaled 500px cover look blocky on a 3× screen.
+  final FilterQuality filterQuality;
+
   @override
   Widget build(BuildContext context) {
     final t = SwissTokens.of(context);
     final border = showBorder && !circular
         ? Border.all(color: t.hairline, width: 1)
         : null;
+
+    // Always ask for the biggest rendition the CDN has. A track cached by an
+    // older build (or restored from a backup) can carry a 150×150 URL, and the
+    // plate must not inherit that blur.
+    final resolvedUrl = hiresArtwork(imageUrl);
 
     Widget content = ClipRRect(
       borderRadius: circular
@@ -48,12 +60,13 @@ class SwissArtwork extends StatelessWidget {
           borderRadius: circular ? null : BorderRadius.circular(radius),
           shape: circular ? BoxShape.circle : BoxShape.rectangle,
         ),
-        child: imageUrl.isEmpty
+        child: resolvedUrl.isEmpty
             ? _Fallback(icon: placeholderIcon, circular: circular)
             : CachedNetworkImage(
-                imageUrl: imageUrl,
+                imageUrl: resolvedUrl,
                 fit: BoxFit.cover,
                 fadeInDuration: const Duration(milliseconds: 180),
+                filterQuality: filterQuality,
                 placeholder: (context, _) => const SwissSkeleton(
                   height: double.infinity,
                   radius: SwissTokens.radius,
@@ -122,7 +135,11 @@ class MosaicArtwork extends StatelessWidget {
     if (covers.isEmpty) {
       body = Center(child: Icon(placeholderIcon, size: 22, color: t.inkFaint));
     } else if (covers.length == 1) {
-      body = CachedNetworkImage(imageUrl: covers.first, fit: BoxFit.cover);
+      body = CachedNetworkImage(
+        imageUrl: hiresArtwork(covers.first),
+        fit: BoxFit.cover,
+        filterQuality: FilterQuality.medium,
+      );
     } else {
       body = Column(
         children: [
@@ -152,7 +169,11 @@ class MosaicArtwork extends StatelessWidget {
     Widget cell(String? url) => Expanded(
       child: url == null || url.isEmpty
           ? const ColoredBox(color: Colors.transparent)
-          : CachedNetworkImage(imageUrl: url, fit: BoxFit.cover),
+          : CachedNetworkImage(
+              imageUrl: hiresArtwork(url),
+              fit: BoxFit.cover,
+              filterQuality: FilterQuality.medium,
+            ),
     );
     return Row(
       children: [cell(left), cell(right)],

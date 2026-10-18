@@ -62,4 +62,30 @@ void main() {
     await next.load();
     expect(next.value.hasSeenCredits, isTrue);
   });
+
+  // The gate must be able to tell "the store was read and this is a first
+  // install" from "the store has not been read yet" — otherwise a slow startup
+  // looks like a first install on every launch, which is exactly how the
+  // credits page used to reappear for existing users.
+  test('a store that has not been read yet says so', () {
+    final service = SettingsService();
+    expect(service.isLoaded, isFalse);
+  });
+
+  test('load signals completion even when the result equals the defaults',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final service = SettingsService();
+    var notifications = 0;
+    service.addListener(() => notifications++);
+
+    await service.load();
+
+    expect(service.isLoaded, isTrue);
+    // The loaded value is the same const defaults object, so the notifier on
+    // its own would stay silent — the gate would never hear that the store
+    // was read.
+    expect(notifications, greaterThanOrEqualTo(1));
+  });
 }

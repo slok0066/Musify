@@ -275,6 +275,13 @@ class SettingsService extends ValueNotifier<MusifySettings> {
 
   SharedPreferences? _prefs;
 
+  bool _loaded = false;
+
+  /// True once [load] has finished, successfully or not. Until then the store
+  /// holds the defaults and `hasSeenCredits == false` means "not read yet",
+  /// not "first install" — the credits gate must not act on that.
+  bool get isLoaded => _loaded;
+
   /// Hydrates from disk. Guarded by the caller's startup timeout, so a missing
   /// or corrupt store simply yields defaults.
   Future<void> load() async {
@@ -285,10 +292,16 @@ class SettingsService extends ValueNotifier<MusifySettings> {
       if (seenFlag && !loaded.hasSeenCredits) {
         loaded = loaded.copyWith(hasSeenCredits: true);
       }
+      _loaded = true;
       value = loaded;
+      // The gate must hear "the store was read" even when the value happens to
+      // equal the defaults, which the notifier alone would swallow.
+      notifyListeners();
     } catch (e) {
       debugPrint('SettingsService.load failed, using defaults: $e');
+      _loaded = true;
       value = const MusifySettings();
+      notifyListeners();
     }
   }
 
