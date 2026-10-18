@@ -1,7 +1,7 @@
 {
-  "version": "1.0.4",
-  "build": 5,
-  "release_notes": "• New Spotify-style poster dynamic gradients in player\n• Beautiful new official Musify icon\n• New cute credits page with @king_togetherness\n• Direct JSON backup export/import to Downloads\n• Performance and streaming improvements",
+  "version": "1.0.5",
+  "build": 6,
+  "release_notes": "• Taller cinematic auto-sliding poster carousel for trending hits\n• Seamless Instagram deep-linking to @king_togetherness\n• Player seekbar smoothness and touch optimizations\n• Performance polish and lossless audio streaming fixes",
   "download_url": "https://github.com/slok0066/Musify/releases/latest",
   "mandatory": false
 }

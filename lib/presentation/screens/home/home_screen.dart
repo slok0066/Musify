@@ -826,7 +826,7 @@ class _QuickSongRailState extends State<_QuickSongRail> {
         : 0;
 
     _pageController = PageController(
-      viewportFraction: 0.88,
+      viewportFraction: 0.65,
       initialPage: initialPage,
     );
     _activePage = initialPage;
@@ -897,39 +897,14 @@ class _QuickSongRailState extends State<_QuickSongRail> {
                     ),
                   ],
                 ),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: t.surfaceSunken,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: t.hairline, width: 0.8),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.auto_awesome_rounded, size: 11, color: t.accent),
-                      const SizedBox(width: 4),
-                      Text(
-                        'AUTO-SLIDING',
-                        style: SwissType.micro.copyWith(
-                          color: t.accent,
-                          fontSize: 9.5,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.6,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
               ],
             ),
           ),
           const SizedBox(height: SwissGrid.sm),
 
-          // Auto-sliding Wide Poster Carousel
+          // Auto-sliding Poster Carousel
           SizedBox(
-            height: 172,
+            height: 252,
             child: NotificationListener<ScrollNotification>(
               onNotification: (notification) {
                 if (notification is ScrollStartNotification) {
