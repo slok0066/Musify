@@ -1,8 +1,8 @@
 {
-  "version": "1.0.15",
-  "build": 16,
-  "release_notes": "• Dropping the scrubber on a part that is not loaded now holds exactly there: the old voice stops at once and playback continues from that spot the moment its bytes arrive — no drift back to the old position, no restart from the top of the song\n• Loading is faster everywhere: the first chunk of a play or a seek is fetched at half the size, so the first sound arrives roughly twice as quickly, and a far seek on a song already on disk is served straight from the file instead of decoding the whole track first\n• Continuous dragging is safe: rapid releases coalesce into one final seek, a stream that fails after a seek now lands on your drop position instead of the start of the song, and the seek watchdog no longer gives up while the engine is merely starvation-paused\n• Audio focus: Musify asks Android for focus when it plays, so a call or another app like YouTube now pauses it — a call ending resumes, YouTube does not — and unplugging headphones pauses too",
-  "download_url": "https://github.com/slok0066/Musify/releases/download/v1.0.15/app-arm64-v8a-release.apk",
-  "apk_url": "https://github.com/slok0066/Musify/releases/download/v1.0.15/app-arm64-v8a-release.apk",
+  "version": "1.0.16",
+  "build": 17,
+  "release_notes": "• Playback Engine Stability: Expanded cache buffer to 512 MB with 30-minute protection, preventing abrupt playback halts after 2–3 songs\n• Seamless Repeat Mode: Tracks loop continuously when repeat is enabled without stream or buffer exhaustion\n• Live Playlist Sync: Track highlights and playing equalizer indicators update instantly when tracks change in playlists, collections, and search\n• Quick Spatial 8D & Shuffle: Added 8D Audio button and Shuffle controls directly to Home featured cards and Android Lock Screen / Notification bar\n• Full-Screen Minimal Updater: Redesigned in-app update experience with clean flat surfaces, full changelog viewer, and zero glow or neon effects",
+  "download_url": "https://github.com/slok0066/Musify/releases/download/v1.0.16/app-arm64-v8a-release.apk",
+  "apk_url": "https://github.com/slok0066/Musify/releases/download/v1.0.16/app-arm64-v8a-release.apk",
   "mandatory": false
 }

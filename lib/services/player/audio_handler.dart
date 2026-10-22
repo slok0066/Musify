@@ -236,8 +236,17 @@ class MusifyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler
           MediaControl.skipToPrevious,
           if (playing) MediaControl.pause else MediaControl.play,
           MediaControl.skipToNext,
+          const MediaControl(
+            androidIcon: 'drawable/ic_launcher_foreground',
+            label: '8D Audio',
+            action: MediaAction.custom,
+          ),
         ],
-        systemActions: const {MediaAction.seek},
+        systemActions: const {
+          MediaAction.seek,
+          MediaAction.setShuffleMode,
+          MediaAction.setRepeatMode,
+        },
         androidCompactActionIndices: const [0, 1, 2],
         processingState: processingState,
         playing: playing,
@@ -322,6 +331,13 @@ class MusifyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler
   /// The lock screen's heart button, wired to the same store as the in-app one.
   Future<void> setLiked(bool liked, {required Track track}) async {
     await _likeDelegate?.call(track, liked);
+  }
+
+  @override
+  Future<void> customAction(String name, [Map<String, dynamic>? extras]) async {
+    if (name == '8D Audio' || name == 'toggle8D' || name == 'toggle_8d') {
+      _player.toggle8D();
+    }
   }
 
   @override

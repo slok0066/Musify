@@ -735,28 +735,138 @@ class SongRectangleCard extends StatelessWidget {
                           ],
                         ),
                       ),
-                      const SizedBox(width: 10),
-                      Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: t.accent,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: t.accent.withValues(alpha: 0.45),
-                              blurRadius: 12,
-                              offset: const Offset(0, 3),
-                            ),
-                          ],
-                        ),
-                        child: Center(
-                          child: Icon(
-                            Icons.play_arrow_rounded,
-                            size: 24,
-                            color: t.accentInk,
-                          ),
-                        ),
+                      const SizedBox(width: 8),
+                      BlocBuilder<PlayerCubit, PlayerState>(
+                        buildWhen: (previous, next) =>
+                            previous.track?.id != next.track?.id ||
+                            previous.isPlaying != next.isPlaying ||
+                            previous.is8D != next.is8D ||
+                            previous.shuffle != next.shuffle,
+                        builder: (context, playerState) {
+                          final player = context.read<PlayerCubit>();
+                          final isCurrent = playerState.track?.id == track.id;
+                          final isPlaying = isCurrent && playerState.isPlaying;
+                          final is8D = playerState.is8D;
+                          final isShuffle = playerState.shuffle;
+
+                          return Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // Shuffle button
+                              GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () {
+                                  Haptics.tap();
+                                  player.toggleShuffle();
+                                },
+                                child: Container(
+                                  width: 34,
+                                  height: 34,
+                                  decoration: BoxDecoration(
+                                    color: isShuffle
+                                        ? t.accent
+                                        : Colors.black.withValues(alpha: 0.55),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: isShuffle
+                                          ? t.accent
+                                          : Colors.white.withValues(alpha: 0.25),
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Center(
+                                    child: Icon(
+                                      Icons.shuffle,
+                                      size: 16,
+                                      color: isShuffle ? t.accentInk : Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+
+                              // 8D Audio button
+                              GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () {
+                                  Haptics.commit();
+                                  player.set8D(!is8D);
+                                },
+                                child: Container(
+                                  height: 34,
+                                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                                  decoration: BoxDecoration(
+                                    color: is8D
+                                        ? t.accent
+                                        : Colors.black.withValues(alpha: 0.55),
+                                    borderRadius: BorderRadius.circular(17),
+                                    border: Border.all(
+                                      color: is8D
+                                          ? t.accent
+                                          : Colors.white.withValues(alpha: 0.25),
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.surround_sound,
+                                        size: 15,
+                                        color: is8D ? t.accentInk : Colors.white,
+                                      ),
+                                      const SizedBox(width: 3),
+                                      Text(
+                                        '8D',
+                                        style: SwissType.micro.copyWith(
+                                          color: is8D ? t.accentInk : Colors.white,
+                                          fontWeight: FontWeight.w700,
+                                          letterSpacing: 0.5,
+                                          fontSize: 10,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+
+                              // Flat Clean Play / Pause button (NO GLOW, NO GRADIENT)
+                              GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () {
+                                  Haptics.tap();
+                                  if (isCurrent) {
+                                    player.togglePlayPause();
+                                  } else {
+                                    onTap();
+                                  }
+                                },
+                                child: Container(
+                                  width: 38,
+                                  height: 38,
+                                  decoration: BoxDecoration(
+                                    color: t.accent,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: t.hairline,
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Center(
+                                    child: Icon(
+                                      isPlaying
+                                          ? Icons.pause_rounded
+                                          : Icons.play_arrow_rounded,
+                                      size: 22,
+                                      color: t.accentInk,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
                       ),
                     ],
                   ),

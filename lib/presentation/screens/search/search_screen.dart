@@ -451,23 +451,35 @@ class _ResultList extends StatelessWidget {
             title: 'MATCHED TRACKS',
             subtitle: '${state.results.songs.length}${state.canLoadMore ? '+' : ''} MATCHES',
           ),
-          for (var i = 0; i < visibleSongs.take(30).length; i++)
-            TrackListTile(
-              track: visibleSongs[i],
-              index: i,
-              showArtwork: true,
-              showBitrate: false,
-              showDivider: false,
-              artworkSize: 52,
-              padding: const EdgeInsets.symmetric(
-                horizontal: SwissGrid.gutter,
-                vertical: 8,
-              ),
-              isCurrent: player.state.track?.id == visibleSongs[i].id,
-              isPlaying: player.state.isPlaying,
-              onTap: () => play(visibleSongs[i]),
-              onOptions: () => showTrackOptions(context, visibleSongs[i], source: 'SEARCH', queueContext: songs),
-            ),
+          BlocBuilder<PlayerCubit, PlayerState>(
+            buildWhen: (previous, next) =>
+                previous.track?.id != next.track?.id ||
+                previous.isPlaying != next.isPlaying,
+            builder: (context, playerState) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (var i = 0; i < visibleSongs.take(30).length; i++)
+                    TrackListTile(
+                      track: visibleSongs[i],
+                      index: i,
+                      showArtwork: true,
+                      showBitrate: false,
+                      showDivider: false,
+                      artworkSize: 52,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: SwissGrid.gutter,
+                        vertical: 8,
+                      ),
+                      isCurrent: playerState.track?.id == visibleSongs[i].id,
+                      isPlaying: playerState.isPlaying,
+                      onTap: () => play(visibleSongs[i]),
+                      onOptions: () => showTrackOptions(context, visibleSongs[i], source: 'SEARCH', queueContext: songs),
+                    ),
+                ],
+              );
+            },
+          ),
           if (facet == SearchFacet.songs)
             _LoadMore(
               canLoadMore: state.canLoadMore,

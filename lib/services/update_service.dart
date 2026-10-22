@@ -154,7 +154,7 @@ class UpdateService {
     _dismissedThisSession = true;
   }
 
-  /// Displays the clean, minimal in-app update popup dialog.
+  /// Displays the clean, minimal full-screen in-app update page.
   static Future<void> showUpdateDialog(
     BuildContext context,
     AppUpdateInfo info,
@@ -163,10 +163,15 @@ class UpdateService {
     isDialogShowing = true;
 
     try {
-      await showDialog<void>(
-        context: context,
-        barrierDismissible: !info.isMandatory,
-        builder: (ctx) => _UpdateDialogModal(info: info),
+      await Navigator.of(context, rootNavigator: true).push<void>(
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              UpdateScreen(info: info),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(opacity: animation, child: child);
+          },
+          fullscreenDialog: true,
+        ),
       );
     } finally {
       isDialogShowing = false;
@@ -181,16 +186,18 @@ enum _UpdateStep {
   error,
 }
 
-class _UpdateDialogModal extends StatefulWidget {
+/// A full-screen, minimal and clean system update screen.
+/// Follows Swiss design rules: flat surfaces, no glow, no gradients on buttons.
+class UpdateScreen extends StatefulWidget {
   final AppUpdateInfo info;
 
-  const _UpdateDialogModal({required this.info});
+  const UpdateScreen({required this.info, super.key});
 
   @override
-  State<_UpdateDialogModal> createState() => _UpdateDialogModalState();
+  State<UpdateScreen> createState() => _UpdateScreenState();
 }
 
-class _UpdateDialogModalState extends State<_UpdateDialogModal> {
+class _UpdateScreenState extends State<UpdateScreen> {
   _UpdateStep _step = _UpdateStep.prompt;
   double _progress = 0.0;
   int _receivedBytes = 0;
@@ -201,7 +208,7 @@ class _UpdateDialogModalState extends State<_UpdateDialogModal> {
 
   @override
   void dispose() {
-    _cancelToken?.cancel('Dialog disposed');
+    _cancelToken?.cancel('UpdateScreen disposed');
     super.dispose();
   }
 
@@ -334,186 +341,443 @@ class _UpdateDialogModalState extends State<_UpdateDialogModal> {
           _cancelDownload();
         }
       },
-      child: Center(
-        child: SingleChildScrollView(
-          child: Material(
-            color: Colors.transparent,
-            child: Container(
-              width: 330,
-              margin: const EdgeInsets.symmetric(horizontal: 24),
-              padding: const EdgeInsets.all(22),
-              decoration: BoxDecoration(
-                color: t.surfaceRaised,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: t.hairline, width: 1.2),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.35),
-                    blurRadius: 30,
-                    offset: const Offset(0, 14),
-                  ),
-                ],
+      child: Scaffold(
+        backgroundColor: t.bg,
+        body: SafeArea(
+          child: Column(
+            children: [
+              // Clean top header bar
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: SwissGrid.gutter,
+                  vertical: SwissGrid.sm,
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'SYSTEM // UPDATE',
+                            style: SwissType.label.copyWith(color: t.accent),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'MUSIFY v${widget.info.version}',
+                            style: SwissType.displaySm.copyWith(
+                              color: t.ink,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (!widget.info.isMandatory &&
+                        _step != _UpdateStep.downloading)
+                      TactileIconKeycap(
+                        icon: Icons.close,
+                        size: 36,
+                        iconSize: 18,
+                        tooltip: 'Dismiss',
+                        onPressed: () {
+                          locator<UpdateService>().markDismissed();
+                          Navigator.of(context).pop();
+                        },
+                      ),
+                  ],
+                ),
               ),
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 220),
-                child: _buildBody(context, t),
+              const Divider(height: 1, thickness: 1),
+
+              // Scrollable body content
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.all(SwissGrid.gutter),
+                  children: [
+                    const SizedBox(height: SwissGrid.md),
+
+                    // App icon and version identity
+                    Center(
+                      child: Column(
+                        children: [
+                          Container(
+                            width: 72,
+                            height: 72,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: t.hairline, width: 1.2),
+                              color: t.surfaceRaised,
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(19),
+                              child: Image.asset(
+                                'assets/icon/app_icon.png',
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: SwissGrid.md),
+                          Text(
+                            'New Version Available',
+                            style: SwissType.displaySm.copyWith(
+                              color: t.ink,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: SwissGrid.xs),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: t.surfaceSunken,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: t.hairline, width: 1),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'CURRENT v$kAppVersion',
+                                  style: SwissType.micro.copyWith(
+                                    color: t.inkMuted,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Icon(
+                                  Icons.arrow_forward,
+                                  size: 12,
+                                  color: t.accent,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'NEW v${widget.info.version}',
+                                  style: SwissType.micro.copyWith(
+                                    color: t.accent,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: SwissGrid.xl),
+
+                    // Dynamic State Content
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 200),
+                      child: _buildCurrentStateView(context, t),
+                    ),
+                  ],
+                ),
               ),
-            ),
+
+              // Fixed Bottom Action Dock
+              Container(
+                padding: const EdgeInsets.all(SwissGrid.gutter),
+                decoration: BoxDecoration(
+                  color: t.surfaceRaised,
+                  border: Border(top: BorderSide(color: t.hairline, width: 1)),
+                ),
+                child: _buildBottomActions(context, t),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _buildBody(BuildContext context, SwissTokens t) {
+  Widget _buildCurrentStateView(BuildContext context, SwissTokens t) {
     switch (_step) {
       case _UpdateStep.prompt:
-        return _buildPromptState(context, t);
+        return _buildPromptContent(t);
       case _UpdateStep.downloading:
-        return _buildDownloadingState(context, t);
+        return _buildDownloadingContent(t);
       case _UpdateStep.ready:
-        return _buildReadyState(context, t);
+        return _buildReadyContent(t);
       case _UpdateStep.error:
-        return _buildErrorState(context, t);
+        return _buildErrorContent(t);
     }
   }
 
-  Widget _buildPromptState(BuildContext context, SwissTokens t) {
+  Widget _buildPromptContent(SwissTokens t) {
     return Column(
-      key: const ValueKey('prompt'),
-      mainAxisSize: MainAxisSize.min,
+      key: const ValueKey('prompt_content'),
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // App icon with subtle halo
-        Stack(
-          alignment: Alignment.center,
-          children: [
-            Container(
-              width: 76,
-              height: 76,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: t.accent.withValues(alpha: 0.12),
-              ),
-            ),
-            Container(
-              width: 58,
-              height: 58,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: t.hairline, width: 1),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.2),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(15),
-                child: Image.asset(
-                  'assets/icon/app_icon.png',
-                  fit: BoxFit.cover,
-                ),
-              ),
-            ),
-          ],
+        SectionHeader(
+          index: '01',
+          title: "WHAT'S NEW",
+          subtitle: 'CHANGELOG // v${widget.info.version}',
         ),
-        const SizedBox(height: 16),
-
-        // Title
-        Text(
-          'Update Available',
-          style: SwissType.displaySm.copyWith(
-            color: t.ink,
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-          ),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 6),
-
-        // Version badge
+        const SizedBox(height: SwissGrid.xs),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          width: double.infinity,
+          padding: const EdgeInsets.all(SwissGrid.md),
+          decoration: BoxDecoration(
+            color: t.surfaceRaised,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: t.hairline, width: 1),
+          ),
+          child: Text(
+            widget.info.releaseNotes.trim().isEmpty
+                ? 'Performance improvements, bug fixes and UI updates.'
+                : widget.info.releaseNotes,
+            style: SwissType.body.copyWith(
+              color: t.ink,
+              fontSize: 13.5,
+              height: 1.5,
+            ),
+          ),
+        ),
+        const SizedBox(height: SwissGrid.md),
+        Container(
+          padding: const EdgeInsets.all(SwissGrid.sm),
           decoration: BoxDecoration(
             color: t.surfaceSunken,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: t.hairline, width: 0.8),
           ),
-          child: Text(
-            'v${widget.info.version} (current v$kAppVersion)',
-            style: SwissType.micro.copyWith(
-              color: t.inkMuted,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.3,
-            ),
+          child: Row(
+            children: [
+              Icon(Icons.security, size: 16, color: t.inkFaint),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Verified official release built directly from repository.',
+                  style: SwissType.micro.copyWith(color: t.inkMuted),
+                ),
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 16),
+      ],
+    );
+  }
 
-        // Changelog card
+  Widget _buildDownloadingContent(SwissTokens t) {
+    final percentInt = (_progress * 100).clamp(0, 100).toInt();
+
+    return Column(
+      key: const ValueKey('downloading_content'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SectionHeader(
+          index: '02',
+          title: 'DOWNLOADING',
+          subtitle: 'FETCHING PACKAGE // $percentInt%',
+        ),
+        const SizedBox(height: SwissGrid.xs),
         Container(
           width: double.infinity,
-          constraints: const BoxConstraints(maxHeight: 160),
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(SwissGrid.lg),
           decoration: BoxDecoration(
-            color: t.surfaceSunken,
+            color: t.surfaceRaised,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: t.hairline, width: 0.8),
+            border: Border.all(color: t.hairline, width: 1),
           ),
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  "WHAT'S NEW",
-                  style: SwissType.micro.copyWith(
-                    color: t.inkFaint,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.0,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    '$percentInt%',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 36,
+                      fontWeight: FontWeight.w800,
+                      color: t.accent,
+                      letterSpacing: -1,
+                    ),
+                  ),
+                  Text(
+                    _formatBytes(_receivedBytes) +
+                        (_totalBytes > 0
+                            ? ' / ${_formatBytes(_totalBytes)}'
+                            : ''),
+                    style: SwissType.label.copyWith(color: t.inkMuted),
+                  ),
+                ],
+              ),
+              const SizedBox(height: SwissGrid.md),
+
+              // Flat progress bar - strictly no glow, no gradient
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: Container(
+                  height: 8,
+                  width: double.infinity,
+                  color: t.surfaceSunken,
+                  child: FractionallySizedBox(
+                    alignment: Alignment.centerLeft,
+                    widthFactor: _progress.clamp(0.02, 1.0),
+                    child: Container(
+                      color: t.accent,
+                    ),
                   ),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  widget.info.releaseNotes,
-                  style: SwissType.body.copyWith(
-                    color: t.ink,
-                    fontSize: 12.5,
-                    height: 1.45,
-                  ),
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(height: SwissGrid.sm),
+              Text(
+                'Direct in-app package download. Installer will launch automatically.',
+                style: SwissType.micro.copyWith(color: t.inkFaint),
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 20),
+      ],
+    );
+  }
 
-        // Actions
-        Row(
+  Widget _buildReadyContent(SwissTokens t) {
+    return Column(
+      key: const ValueKey('ready_content'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SectionHeader(
+          index: '03',
+          title: 'READY TO INSTALL',
+          subtitle: 'PACKAGE DOWNLOADED',
+        ),
+        const SizedBox(height: SwissGrid.xs),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(SwissGrid.lg),
+          decoration: BoxDecoration(
+            color: t.surfaceRaised,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: t.hairline, width: 1),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.check_circle_outline, color: t.positive, size: 28),
+                  const SizedBox(width: SwissGrid.sm),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Download Complete',
+                          style: SwissType.bodySm.copyWith(
+                            color: t.ink,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        Text(
+                          'Musify v${widget.info.version} is ready to install.',
+                          style: SwissType.micro.copyWith(color: t.inkMuted),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildErrorContent(SwissTokens t) {
+    return Column(
+      key: const ValueKey('error_content'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SectionHeader(
+          index: 'ERR',
+          title: 'UPDATE FAILED',
+          subtitle: 'CONNECTION INTERRUPTED',
+        ),
+        const SizedBox(height: SwissGrid.xs),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(SwissGrid.lg),
+          decoration: BoxDecoration(
+            color: t.surfaceRaised,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: t.hairline, width: 1),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.error_outline, color: t.danger, size: 28),
+                  const SizedBox(width: SwissGrid.sm),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Could not complete download',
+                          style: SwissType.bodySm.copyWith(
+                            color: t.ink,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _errorMessage ?? 'Network interrupted. Please try again.',
+                          style: SwissType.micro.copyWith(color: t.inkMuted),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBottomActions(BuildContext context, SwissTokens t) {
+    switch (_step) {
+      case _UpdateStep.prompt:
+        return Row(
           children: [
-            if (!widget.info.isMandatory)
+            if (!widget.info.isMandatory) ...[
               Expanded(
+                flex: 2,
                 child: TactileKeycap(
-                  height: 44,
+                  height: 48,
+                  glow: false,
                   onPressed: () {
-                    HapticFeedback.lightImpact();
                     locator<UpdateService>().markDismissed();
                     Navigator.of(context).pop();
                   },
                   child: Center(
                     child: Text(
                       'LATER',
-                      style: SwissType.label.copyWith(color: t.ink),
+                      style: SwissType.label.copyWith(color: t.inkMuted),
                     ),
                   ),
                 ),
               ),
-            if (!widget.info.isMandatory) const SizedBox(width: 10),
+              const SizedBox(width: SwissGrid.sm),
+            ],
             Expanded(
+              flex: 3,
               child: TactileKeycap(
-                height: 44,
+                height: 48,
                 accent: true,
+                glow: false,
                 onPressed: () {
                   HapticFeedback.mediumImpact();
                   _startDownload();
@@ -522,13 +786,14 @@ class _UpdateDialogModalState extends State<_UpdateDialogModal> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.bolt_rounded, size: 16, color: t.accentInk),
-                      const SizedBox(width: 4),
+                      Icon(Icons.download_rounded, size: 18, color: t.accentInk),
+                      const SizedBox(width: 6),
                       Text(
                         'UPDATE NOW',
                         style: SwissType.label.copyWith(
                           color: t.accentInk,
                           fontWeight: FontWeight.w700,
+                          letterSpacing: 1.0,
                         ),
                       ),
                     ],
@@ -537,185 +802,47 @@ class _UpdateDialogModalState extends State<_UpdateDialogModal> {
               ),
             ),
           ],
-        ),
-      ],
-    );
-  }
+        );
 
-  Widget _buildDownloadingState(BuildContext context, SwissTokens t) {
-    final percentInt = (_progress * 100).clamp(0, 100).toInt();
-
-    return Column(
-      key: const ValueKey('downloading'),
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // Minimal downloading icon with glow
-        Container(
-          width: 60,
-          height: 60,
-          decoration: BoxDecoration(
-            color: t.accent.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: t.accent.withValues(alpha: 0.3), width: 1.2),
-          ),
-          child: Center(
-            child: Icon(
-              Icons.download_rounded,
-              color: t.accent,
-              size: 28,
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        Text(
-          'Downloading Update',
-          style: SwissType.displaySm.copyWith(
-            color: t.ink,
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-          ),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 12),
-
-        // Large minimal percentage readout
-        Text(
-          '$percentInt%',
-          style: TextStyle(
-            fontFamily: 'Inter',
-            fontSize: 32,
-            fontWeight: FontWeight.w800,
-            color: t.accent,
-            letterSpacing: -0.5,
-          ),
-        ),
-        const SizedBox(height: 4),
-
-        // Bytes indicator
-        Text(
-          _formatBytes(_receivedBytes) +
-              (_totalBytes > 0 ? ' / ${_formatBytes(_totalBytes)}' : ''),
-          style: SwissType.micro.copyWith(
-            color: t.inkMuted,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0.2,
-          ),
-        ),
-        const SizedBox(height: 18),
-
-        // Sleek Swiss progress bar
-        ClipRRect(
-          borderRadius: BorderRadius.circular(6),
-          child: Container(
-            height: 7,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              color: t.surfaceSunken,
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: t.hairline, width: 0.6),
-            ),
-            child: FractionallySizedBox(
-              alignment: Alignment.centerLeft,
-              widthFactor: _progress.clamp(0.02, 1.0),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: t.accent,
-                  borderRadius: BorderRadius.circular(6),
-                  boxShadow: [
-                    BoxShadow(
-                      color: t.accent.withValues(alpha: 0.4),
-                      blurRadius: 6,
-                    ),
-                  ],
-                ),
+      case _UpdateStep.downloading:
+        return SizedBox(
+          width: double.infinity,
+          child: TactileKeycap(
+            height: 48,
+            glow: false,
+            onPressed: _cancelDownload,
+            child: Center(
+              child: Text(
+                'CANCEL DOWNLOAD',
+                style: SwissType.label.copyWith(color: t.inkMuted),
               ),
             ),
           ),
-        ),
-        const SizedBox(height: 22),
+        );
 
-        // Cancel button
-        TactileKeycap(
-          height: 42,
-          onPressed: _cancelDownload,
-          child: Center(
-            child: Text(
-              'CANCEL',
-              style: SwissType.label.copyWith(color: t.inkMuted),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildReadyState(BuildContext context, SwissTokens t) {
-    return Column(
-      key: const ValueKey('ready'),
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 60,
-          height: 60,
-          decoration: BoxDecoration(
-            color: t.accent.withValues(alpha: 0.14),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: t.accent.withValues(alpha: 0.35), width: 1.2),
-          ),
-          child: Center(
-            child: Icon(
-              Icons.check_circle_rounded,
-              color: t.accent,
-              size: 32,
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        Text(
-          'Ready to Install',
-          style: SwissType.displaySm.copyWith(
-            color: t.ink,
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-          ),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 8),
-
-        Text(
-          'Musify v${widget.info.version} downloaded.\nPackage installer has been triggered.',
-          textAlign: TextAlign.center,
-          style: SwissType.body.copyWith(
-            color: t.inkMuted,
-            fontSize: 12.5,
-            height: 1.4,
-          ),
-        ),
-        const SizedBox(height: 20),
-
-        Row(
+      case _UpdateStep.ready:
+        return Row(
           children: [
             Expanded(
               child: TactileKeycap(
-                height: 44,
-                onPressed: () {
-                  Navigator.of(context).pop();
-                },
+                height: 48,
+                glow: false,
+                onPressed: () => Navigator.of(context).pop(),
                 child: Center(
                   child: Text(
-                    'CLOSE',
-                    style: SwissType.label.copyWith(color: t.ink),
+                    'DISMISS',
+                    style: SwissType.label.copyWith(color: t.inkMuted),
                   ),
                 ),
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: SwissGrid.sm),
             Expanded(
+              flex: 2,
               child: TactileKeycap(
-                height: 44,
+                height: 48,
                 accent: true,
+                glow: false,
                 onPressed: () {
                   HapticFeedback.mediumImpact();
                   if (_downloadedApkPath != null) {
@@ -723,72 +850,34 @@ class _UpdateDialogModalState extends State<_UpdateDialogModal> {
                   }
                 },
                 child: Center(
-                  child: Text(
-                    'INSTALL NOW',
-                    style: SwissType.label.copyWith(
-                      color: t.accentInk,
-                      fontWeight: FontWeight.w700,
-                    ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.system_update_rounded, size: 18, color: t.accentInk),
+                      const SizedBox(width: 6),
+                      Text(
+                        'INSTALL NOW',
+                        style: SwissType.label.copyWith(
+                          color: t.accentInk,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.0,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
             ),
           ],
-        ),
-      ],
-    );
-  }
+        );
 
-  Widget _buildErrorState(BuildContext context, SwissTokens t) {
-    return Column(
-      key: const ValueKey('error'),
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 60,
-          height: 60,
-          decoration: BoxDecoration(
-            color: Colors.amber.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: Colors.amber.withValues(alpha: 0.3), width: 1.2),
-          ),
-          child: const Center(
-            child: Icon(
-              Icons.warning_amber_rounded,
-              color: Colors.amber,
-              size: 30,
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        Text(
-          'Download Failed',
-          style: SwissType.displaySm.copyWith(
-            color: t.ink,
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-          ),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 8),
-
-        Text(
-          _errorMessage ?? 'Network interrupted. Please try again.',
-          textAlign: TextAlign.center,
-          style: SwissType.body.copyWith(
-            color: t.inkMuted,
-            fontSize: 12,
-            height: 1.35,
-          ),
-        ),
-        const SizedBox(height: 20),
-
-        Row(
+      case _UpdateStep.error:
+        return Row(
           children: [
             Expanded(
               child: TactileKeycap(
-                height: 44,
+                height: 48,
+                glow: false,
                 onPressed: () async {
                   final uri = Uri.parse(widget.info.downloadUrl);
                   if (await canLaunchUrl(uri)) {
@@ -797,17 +886,18 @@ class _UpdateDialogModalState extends State<_UpdateDialogModal> {
                 },
                 child: Center(
                   child: Text(
-                    'BROWSER',
-                    style: SwissType.label.copyWith(color: t.ink),
+                    'OPEN IN BROWSER',
+                    style: SwissType.label.copyWith(color: t.inkMuted),
                   ),
                 ),
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: SwissGrid.sm),
             Expanded(
               child: TactileKeycap(
-                height: 44,
+                height: 48,
                 accent: true,
+                glow: false,
                 onPressed: _startDownload,
                 child: Center(
                   child: Text(
@@ -821,8 +911,7 @@ class _UpdateDialogModalState extends State<_UpdateDialogModal> {
               ),
             ),
           ],
-        ),
-      ],
-    );
+        );
+    }
   }
 }

@@ -181,7 +181,7 @@ class _UrlForm extends StatelessWidget {
               const SizedBox(height: SwissGrid.md),
               TactileKeycap(
                 accent: true,
-                glow: !busy,
+                glow: false,
                 height: 46,
                 width: double.infinity,
                 enabled: !busy,
@@ -309,7 +309,7 @@ class _Destination extends StatelessWidget {
               const SizedBox(height: SwissGrid.sm),
               TactileKeycap(
                 accent: true,
-                glow: true,
+                glow: false,
                 height: 44,
                 width: double.infinity,
                 onPressed: () => cubit.commitPendingAsPlaylist(nameController.text),

@@ -274,7 +274,7 @@ class _CollectionBody extends StatelessWidget {
                   Expanded(
                     child: TactileKeycap(
                       accent: true,
-                      glow: true,
+                      glow: false,
                       height: 46,
                       width: double.infinity,
                       onPressed:
@@ -404,27 +404,39 @@ class _CollectionBody extends StatelessWidget {
                     onPressed: () => _addAllToPlaylist(context),
                   ),
           ),
-          for (var i = 0; i < tracks.length; i++)
-            TrackListTile(
-              track: tracks[i],
-              index: i,
-              showArtwork: true,
-              showDivider: false,
-              artworkSize: 48.0,
-              isCurrent: player.state.track?.id == tracks[i].id,
-              isPlaying: player.state.isPlaying,
-              onTap: () => player.playTrack(
-                tracks[i],
-                context: tracks,
-                source: collection.title.toUpperCase(),
-              ),
-              onOptions: () => showTrackOptions(
-                context,
-                tracks[i],
-                source: collection.title.toUpperCase(),
-                queueContext: tracks,
-              ),
-            ),
+          BlocBuilder<PlayerCubit, PlayerState>(
+            buildWhen: (previous, next) =>
+                previous.track?.id != next.track?.id ||
+                previous.isPlaying != next.isPlaying,
+            builder: (context, playerState) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (var i = 0; i < tracks.length; i++)
+                    TrackListTile(
+                      track: tracks[i],
+                      index: i,
+                      showArtwork: true,
+                      showDivider: false,
+                      artworkSize: 48.0,
+                      isCurrent: playerState.track?.id == tracks[i].id,
+                      isPlaying: playerState.isPlaying,
+                      onTap: () => player.playTrack(
+                        tracks[i],
+                        context: tracks,
+                        source: collection.title.toUpperCase(),
+                      ),
+                      onOptions: () => showTrackOptions(
+                        context,
+                        tracks[i],
+                        source: collection.title.toUpperCase(),
+                        queueContext: tracks,
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
         ],
 
         // ----------------------------------------------------------- artist bio

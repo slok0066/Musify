@@ -342,7 +342,7 @@ class _Face extends StatelessWidget {
                           width: 74,
                           height: 74,
                           accent: true,
-                          glow: state.isPlaying,
+                          glow: false,
                           onPressed: player.togglePlayPause,
                           tooltip: state.isPlaying ? 'Pause' : 'Play',
                           child: Icon(

@@ -69,7 +69,7 @@ class TactileEightDSwitch extends StatelessWidget {
               Expanded(
                 child: TactileKeycap(
                   accent: enabled,
-                  glow: enabled,
+                  glow: false,
                   width: double.infinity,
                   height: compact ? 38 : 46,
                   onPressed: () {
@@ -175,15 +175,6 @@ class MiniEightDKeycap extends StatelessWidget {
                 color: enabled ? t.accent : t.hairline,
                 width: 1,
               ),
-              boxShadow: enabled
-                  ? [
-                      BoxShadow(
-                        color: t.accent.withValues(alpha: 0.3),
-                        blurRadius: 6,
-                        spreadRadius: 1,
-                      ),
-                    ]
-                  : null,
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,

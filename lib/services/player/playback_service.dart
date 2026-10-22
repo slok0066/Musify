@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -1292,6 +1293,7 @@ class PlaybackService {
       bufferFraction.value = null;
       errorText.value = null;
       isBuffering.value = true;
+      _endNotified = false;
       _bump();
 
       // Instant play first: index the MP4 and stream its AAC frames. A `false`
@@ -1317,7 +1319,7 @@ class PlaybackService {
         return;
       }
 
-      final loaded = source.isLocalFile
+      final loaded = (source.isLocalFile && File(source.path).existsSync())
           ? await _soloud.loadFile(source.path, mode: LoadMode.disk)
           : await _soloud.loadUrl(source.path, mode: LoadMode.disk);
 
@@ -1458,8 +1460,9 @@ class PlaybackService {
   }
 
   Future<void> _replayCurrent() async {
+    _endNotified = false;
     final handle = _handle;
-    if (_live(handle)) {
+    if (!_streaming && _live(handle)) {
       _soloud.seek(handle!, Duration.zero);
       _soloud.setPause(handle!, false);
       position.value = Duration.zero;
@@ -1488,6 +1491,7 @@ class PlaybackService {
     _streamEpoch++;
     _seekDeadline = null;
     _seekTarget = null;
+    _endNotified = false;
     _feedsInFlight.clear();
     final session = _streamSession;
     _streamSession = null;
@@ -1724,6 +1728,7 @@ class PlaybackService {
       position.value = Duration.zero;
       duration.value = _soloud.getLength(incoming);
       buffered.value = duration.value;
+      _endNotified = false;
       _advanceShuffleCursor();
       _bump();
 
@@ -1736,6 +1741,11 @@ class PlaybackService {
       _crossfadeTimer?.cancel();
       _crossfadeTimer = Timer(fade + const Duration(milliseconds: 80), () async {
         _crossfading = false;
+        _streamWatchdog?.cancel();
+        _streamWatchdog = null;
+        _streaming = false;
+        _streamSession?.release();
+        _streamSession = null;
         if (_live(outgoingHandle)) {
           try {
             await _soloud.stop(outgoingHandle!);

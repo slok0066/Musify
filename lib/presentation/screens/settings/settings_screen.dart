@@ -655,7 +655,7 @@ class _SettingsView extends StatelessWidget {
                       const SizedBox(height: SwissGrid.lg),
                       TactileKeycap(
                         accent: true,
-                        glow: true,
+                        glow: false,
                         height: 46,
                         width: double.infinity,
                         onPressed: () => Navigator.of(sheetContext).pop(controller.text),
@@ -722,7 +722,7 @@ class _QualityGroup extends StatelessWidget {
                       height: 42,
                       width: double.infinity,
                       accent: selected == quality,
-                      glow: selected == quality,
+                      glow: false,
                       onPressed: () {
                         Haptics.commit();
                         onSelected(quality);

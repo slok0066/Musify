@@ -74,7 +74,7 @@ class MediaCache {
 
   final Dio _dio;
 
-  static const int maxCacheBytes = 20 * 1024 * 1024;
+  static const int maxCacheBytes = 512 * 1024 * 1024;
   static const Duration _staleAfter = Duration(hours: 12);
 
   /// Parallel connections used for one stream file when the CDN allows ranges.
@@ -841,10 +841,14 @@ class MediaCache {
         return;
       }
 
-      // Oldest first.
+      // Oldest first. Never prune files accessed within the last 30 minutes,
+      // as they belong to the current listening session or the active queue!
       survivors.sort((a, b) => a.accessed.compareTo(b.accessed));
       for (final entry in survivors) {
         if (total <= maxCacheBytes) break;
+        if (now.difference(entry.accessed) < const Duration(minutes: 30)) {
+          continue;
+        }
         await _safeDelete(entry.file);
         total -= entry.size;
       }

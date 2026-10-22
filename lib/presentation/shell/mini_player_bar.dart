@@ -133,6 +133,16 @@ class _Bar extends StatelessWidget {
                           const SizedBox(width: SwissGrid.sm),
                         ],
 
+                        TactileIconKeycap(
+                          icon: Icons.shuffle,
+                          size: 34,
+                          iconSize: 17,
+                          ghost: true,
+                          tint: state.shuffle ? t.accent : t.inkMuted,
+                          tooltip: 'Shuffle',
+                          onPressed: player.toggleShuffle,
+                        ),
+                        const SizedBox(width: SwissGrid.xs),
                         MiniEightDKeycap(
                           enabled: state.is8D,
                           onToggle: player.toggle8D,

@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Musify — Minimal Full-Screen Update Page Preview</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      /* Dark Theme (Carbon) */
+      --bg: #0A0B0E;
+      --surface: #12141A;
+      --surface-raised: #181B22;
+      --surface-sunken: #101217;
+      --hairline: rgba(255, 255, 255, 0.09);
+      --hairline-strong: rgba(255, 255, 255, 0.18);
+      --ink: #FFFFFF;
+      --ink-muted: #B4B7BD;
+      --ink-faint: #71757E;
+      --accent: #FFFFFF;
+      --accent-ink: #0A0B0E;
+      --positive: #7ECF9E;
+      --danger: #FFB4AB;
+      --keycap-bg: #1A1D24;
+      --keycap-border: rgba(255, 255, 255, 0.12);
+      
+      /* Typography */
+      --font-body: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    [data-theme="light"] {
+      /* Light Theme (Alabaster) */
+      --bg: #FFFFFF;
+      --surface: #F6F6F7;
+      --surface-raised: #FFFFFF;
+      --surface-sunken: #EBECEE;
+      --hairline: #E2E3E6;
+      --hairline-strong: #CDCFD4;
+      --ink: #0A0B0E;
+      --ink-muted: #4E535C;
+      --ink-faint: #8B909A;
+      --accent: #0A0B0E;
+      --accent-ink: #FFFFFF;
+      --positive: #2E7D4F;
+      --danger: #BA1A1A;
+      --keycap-bg: #F1F1EF;
+      --keycap-border: #DCDDE1;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      background: #050608;
+      color: #FFFFFF;
+      font-family: var(--font-body);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 16px;
+    }
+
+    /* Top Control Bar */
+    .controls-wrapper {
+      width: 100%;
+      max-width: 440px;
+      margin-bottom: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .meta-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .app-title-tag {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: #8B909A;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .badge-dot {
+      width: 6px;
+      height: 6px;
+      background: #7ECF9E;
+      border-radius: 50%;
+    }
+
+    .state-selector {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      background: #111317;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      padding: 3px;
+      gap: 3px;
+    }
+
+    .state-btn {
+      background: transparent;
+      border: none;
+      color: #8B909A;
+      font-family: var(--font-body);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 8px 4px;
+      border-radius: 7px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      text-align: center;
+    }
+
+    .state-btn:hover {
+      color: #FFFFFF;
+    }
+
+    .state-btn.active {
+      background: #20242D;
+      color: #FFFFFF;
+    }
+
+    .theme-toggle-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 2px;
+    }
+
+    .rule-pill {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: #7ECF9E;
+      background: rgba(126, 207, 158, 0.1);
+      border: 1px solid rgba(126, 207, 158, 0.25);
+      padding: 3px 8px;
+      border-radius: 999px;
+    }
+
+    .theme-toggle-btn {
+      background: #181B22;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: #B4B7BD;
+      font-family: var(--font-body);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 5px 12px;
+      border-radius: 999px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Device Mockup Canvas */
+    .device-chassis {
+      width: 100%;
+      max-width: 410px;
+      height: 840px;
+      background: var(--bg);
+      border-radius: 40px;
+      border: 1px solid var(--hairline-strong);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+      transition: background 0.2s ease, border-color 0.2s ease;
+    }
+
+    /* Android Status Bar */
+    .device-status-bar {
+      height: 38px;
+      padding: 0 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: var(--font-body);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--ink);
+      flex-shrink: 0;
+    }
+
+    .status-icons {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+    }
+
+    /* Screen Top Bar */
+    .screen-header-bar {
+      padding: 12px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--hairline);
+      flex-shrink: 0;
+    }
+
+    .header-system-label {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 1px;
+      font-weight: 700;
+      color: var(--accent);
+      text-transform: uppercase;
+      margin-bottom: 2px;
+    }
+
+    .header-title-label {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+      color: var(--ink);
+    }
+
+    .close-keycap {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: var(--surface-sunken);
+      border: 1px solid var(--hairline);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: var(--ink-muted);
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    /* Scrollable Screen Content */
+    .screen-scroll-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* App Identity Header */
+    .identity-block {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      padding: 4px 0 10px 0;
+    }
+
+    .app-icon-squircle {
+      width: 72px;
+      height: 72px;
+      border-radius: 20px;
+      background: var(--surface-raised);
+      border: 1px solid var(--hairline-strong);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .app-icon-svg {
+      width: 44px;
+      height: 44px;
+    }
+
+    .update-headline {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--ink);
+      letter-spacing: -0.4px;
+      margin-bottom: 8px;
+    }
+
+    .version-flow-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      background: var(--surface-sunken);
+      border: 1px solid var(--hairline);
+      border-radius: 999px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+    }
+
+    .ver-current {
+      color: var(--ink-muted);
+      font-weight: 500;
+    }
+
+    .ver-arrow {
+      color: var(--accent);
+      font-size: 10px;
+    }
+
+    .ver-new {
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    /* Section Header */
+    .section-header-row {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .sec-index {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    .sec-title {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      color: var(--ink);
+    }
+
+    .sec-sub {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--ink-faint);
+      margin-left: auto;
+      text-transform: uppercase;
+    }
+
+    /* Flat Content Card (NO GLOW, NO GRADIENT) */
+    .flat-card {
+      background: var(--surface-raised);
+      border: 1px solid var(--hairline);
+      border-radius: 16px;
+      padding: 16px;
+    }
+
+    .changelog-text {
+      font-size: 13.5px;
+      line-height: 1.6;
+      color: var(--ink);
+    }
+
+    .changelog-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .changelog-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .list-dash {
+      color: var(--ink-faint);
+      font-family: var(--font-mono);
+      font-size: 13px;
+    }
+
+    .security-well {
+      background: var(--surface-sunken);
+      border: 1px solid var(--hairline);
+      border-radius: 12px;
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 11px;
+      color: var(--ink-muted);
+    }
+
+    .security-well svg {
+      flex-shrink: 0;
+      color: var(--ink-faint);
+    }
+
+    /* Downloading State Specifics */
+    .download-percent-display {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      margin-bottom: 12px;
+    }
+
+    .big-percent {
+      font-size: 36px;
+      font-weight: 800;
+      letter-spacing: -1px;
+      color: var(--accent);
+      line-height: 1;
+    }
+
+    .bytes-counter {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--ink-muted);
+    }
+
+    .flat-progress-track {
+      width: 100%;
+      height: 6px;
+      background: var(--surface-sunken);
+      border-radius: 999px;
+      overflow: hidden;
+      margin-bottom: 12px;
+    }
+
+    .flat-progress-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 999px;
+      width: 48%;
+      transition: width 0.3s ease;
+    }
+
+    .download-subtext {
+      font-size: 11px;
+      color: var(--ink-faint);
+    }
+
+    /* Ready & Error States */
+    .status-result-card {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .status-icon-circle {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .status-icon-circle.ready {
+      background: rgba(126, 207, 158, 0.12);
+      color: var(--positive);
+    }
+
+    .status-icon-circle.error {
+      background: rgba(255, 180, 171, 0.12);
+      color: var(--danger);
+    }
+
+    .status-result-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--ink);
+      margin-bottom: 2px;
+    }
+
+    .status-result-desc {
+      font-size: 12px;
+      color: var(--ink-muted);
+    }
+
+    /* Fixed Bottom Action Dock */
+    .bottom-action-dock {
+      padding: 16px 20px 24px 20px;
+      background: var(--surface-raised);
+      border-top: 1px solid var(--hairline);
+      flex-shrink: 0;
+      display: flex;
+      gap: 10px;
+    }
+
+    /* Flat Buttons (STRICTLY NO GLOW, NO GRADIENT) */
+    .btn-flat {
+      height: 48px;
+      border-radius: 999px;
+      font-family: var(--font-body);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      cursor: pointer;
+      transition: opacity 0.1s ease, transform 0.05s ease;
+      text-decoration: none;
+    }
+
+    .btn-flat:active {
+      transform: scale(0.985);
+    }
+
+    /* Secondary / Later button */
+    .btn-flat-secondary {
+      background: transparent;
+      border: 1px solid var(--hairline-strong);
+      color: var(--ink-muted);
+      flex: 2;
+    }
+
+    .btn-flat-secondary:hover {
+      background: var(--surface-sunken);
+      color: var(--ink);
+    }
+
+    /* Primary solid accent button */
+    .btn-flat-primary {
+      background: var(--accent);
+      border: 1px solid var(--accent);
+      color: var(--accent-ink);
+      flex: 3;
+    }
+
+    .btn-flat-primary:hover {
+      opacity: 0.92;
+    }
+
+    .btn-full-width {
+      width: 100%;
+      flex: 1;
+    }
+
+    /* Active view toggle display */
+    .view-panel {
+      display: none;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .view-panel.active {
+      display: flex;
+    }
+  </style>
+</head>
+<body data-theme="dark">
+
+  <!-- Interactive Demo Toolbar -->
+  <div class="controls-wrapper">
+    <div class="meta-header">
+      <div class="app-title-tag">
+        <span class="badge-dot"></span>
+        Musify // Full-Screen Update Page
+      </div>
+      <button class="theme-toggle-btn" onclick="toggleTheme()">
+        <span id="theme-icon">☀️</span>
+        <span id="theme-text">Light Mode</span>
+      </button>
+    </div>
+
+    <!-- State Switcher -->
+    <div class="state-selector">
+      <button class="state-btn active" onclick="switchState('prompt', this)">1. Prompt</button>
+      <button class="state-btn" onclick="switchState('downloading', this)">2. Downloading</button>
+      <button class="state-btn" onclick="switchState('ready', this)">3. Ready</button>
+      <button class="state-btn" onclick="switchState('error', this)">4. Error</button>
+    </div>
+
+    <div class="theme-toggle-row">
+      <span class="rule-pill">✓ Flat Surfaces Only</span>
+      <span class="rule-pill">✓ No Glow / Neon</span>
+      <span class="rule-pill">✓ No Gradients</span>
+    </div>
+  </div>
+
+  <!-- Mobile Frame Mockup -->
+  <div class="device-chassis" id="device">
+    
+    <!-- Status Bar -->
+    <div class="device-status-bar">
+      <span>18:30</span>
+      <div class="status-icons">
+        <span>5G</span>
+        <span>100%</span>
+      </div>
+    </div>
+
+    <!-- Screen Top Header Bar -->
+    <div class="screen-header-bar">
+      <div>
+        <div class="header-system-label">System // Update</div>
+        <div class="header-title-label">Musify v1.5.0</div>
+      </div>
+      <div class="close-keycap" title="Dismiss">✕</div>
+    </div>
+
+    <!-- Scrollable Screen Body -->
+    <div class="screen-scroll-body">
+      
+      <!-- App Icon & Version Badge -->
+      <div class="identity-block">
+        <div class="app-icon-squircle">
+          <!-- Geometric Minimal Musify Emblem -->
+          <svg class="app-icon-svg" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect width="48" height="48" rx="12" fill="var(--surface-sunken)"/>
+            <path d="M16 32V16L32 24L16 32Z" fill="var(--ink)"/>
+            <circle cx="34" cy="32" r="3" fill="var(--accent)"/>
+          </svg>
+        </div>
+        <div class="update-headline">New Version Available</div>
+        <div class="version-flow-pill">
+          <span class="ver-current">CURRENT v1.4.2</span>
+          <span class="ver-arrow">→</span>
+          <span class="ver-new">NEW v1.5.0</span>
+        </div>
+      </div>
+
+      <!-- STATE 1: PROMPT VIEW -->
+      <div id="view-prompt" class="view-panel active">
+        <div>
+          <div class="section-header-row">
+            <span class="sec-index">01</span>
+            <span class="sec-title">What's New</span>
+            <span class="sec-sub">Changelog // v1.5.0</span>
+          </div>
+          <div class="flat-card">
+            <ul class="changelog-list changelog-text">
+              <li>
+                <span class="list-dash">•</span>
+                <span><strong>Rock-solid playback engine:</strong> fixed cache eviction and track transition stalls.</span>
+              </li>
+              <li>
+                <span class="list-dash">•</span>
+                <span><strong>Instant repeat mode:</strong> tracks loop seamlessly without stopping.</span>
+              </li>
+              <li>
+                <span class="list-dash">•</span>
+                <span><strong>Dynamic playlist sync:</strong> track status and playing equalizer updates in real-time.</span>
+              </li>
+              <li>
+                <span class="list-dash">•</span>
+                <span><strong>Featured 8D Audio &amp; Shuffle controls:</strong> accessible directly from home cards and lock screen.</span>
+              </li>
+              <li>
+                <span class="list-dash">•</span>
+                <span><strong>Minimal full-screen updater:</strong> clean flat UI with zero glow and zero gradients.</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="security-well">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+          <span>Verified official release built directly from repository.</span>
+        </div>
+      </div>
+
+      <!-- STATE 2: DOWNLOADING VIEW -->
+      <div id="view-downloading" class="view-panel">
+        <div>
+          <div class="section-header-row">
+            <span class="sec-index">02</span>
+            <span class="sec-title">Downloading</span>
+            <span class="sec-sub">Fetching Package // 48%</span>
+          </div>
+          <div class="flat-card">
+            <div class="download-percent-display">
+              <span class="big-percent" id="percent-label">48%</span>
+              <span class="bytes-counter">14.2 MB / 29.5 MB</span>
+            </div>
+            <div class="flat-progress-track">
+              <div class="flat-progress-fill" id="progress-bar" style="width: 48%;"></div>
+            </div>
+            <div class="download-subtext">
+              Direct in-app package download. Installer will launch automatically.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STATE 3: READY VIEW -->
+      <div id="view-ready" class="view-panel">
+        <div>
+          <div class="section-header-row">
+            <span class="sec-index">03</span>
+            <span class="sec-title">Ready to Install</span>
+            <span class="sec-sub">Package Downloaded</span>
+          </div>
+          <div class="flat-card status-result-card">
+            <div class="status-icon-circle ready">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+            </div>
+            <div>
+              <div class="status-result-title">Download Complete</div>
+              <div class="status-result-desc">Musify v1.5.0 is ready to install.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STATE 4: ERROR VIEW -->
+      <div id="view-error" class="view-panel">
+        <div>
+          <div class="section-header-row">
+            <span class="sec-index">ERR</span>
+            <span class="sec-title">Update Failed</span>
+            <span class="sec-sub">Connection Interrupted</span>
+          </div>
+          <div class="flat-card status-result-card">
+            <div class="status-icon-circle error">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="8" x2="12" y2="12"/>
+                <line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+            </div>
+            <div>
+              <div class="status-result-title">Could not complete download</div>
+              <div class="status-result-desc">Network connection interrupted. Please try again.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Fixed Bottom Action Dock (Clean Flat Buttons) -->
+    <div class="bottom-action-dock" id="bottom-dock">
+      <!-- Default Prompt Buttons -->
+      <button class="btn-flat btn-flat-secondary" onclick="alert('Update postponed')">Later</button>
+      <button class="btn-flat btn-flat-primary" onclick="switchState('downloading', document.querySelectorAll('.state-btn')[1])">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        Update Now
+      </button>
+    </div>
+
+  </div>
+
+  <script>
+    let currentStep = 'prompt';
+
+    function switchState(step, element) {
+      currentStep = step;
+
+      // Update button highlights
+      document.querySelectorAll('.state-btn').forEach(btn => btn.classList.remove('active'));
+      if (element) element.classList.add('active');
+
+      // Update panels
+      document.querySelectorAll('.view-panel').forEach(panel => panel.classList.remove('active'));
+      const activePanel = document.getElementById(`view-${step}`);
+      if (activePanel) activePanel.classList.add('active');
+
+      // Update bottom action buttons
+      const dock = document.getElementById('bottom-dock');
+      if (step === 'prompt') {
+        dock.innerHTML = `
+          <button class="btn-flat btn-flat-secondary">Later</button>
+          <button class="btn-flat btn-flat-primary" onclick="switchState('downloading', document.querySelectorAll('.state-btn')[1])">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            Update Now
+          </button>
+        `;
+      } else if (step === 'downloading') {
+        dock.innerHTML = `
+          <button class="btn-flat btn-flat-secondary btn-full-width" onclick="switchState('prompt', document.querySelectorAll('.state-btn')[0])">
+            Cancel Download
+          </button>
+        `;
+      } else if (step === 'ready') {
+        dock.innerHTML = `
+          <button class="btn-flat btn-flat-secondary" onclick="switchState('prompt', document.querySelectorAll('.state-btn')[0])">
+            Dismiss
+          </button>
+          <button class="btn-flat btn-flat-primary" onclick="alert('Launching native Android package installer...')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2v10m0 0l-4-4m4 4l4-4M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/>
+            </svg>
+            Install Now
+          </button>
+        `;
+      } else if (step === 'error') {
+        dock.innerHTML = `
+          <button class="btn-flat btn-flat-secondary" onclick="switchState('prompt', document.querySelectorAll('.state-btn')[0])">
+            Cancel
+          </button>
+          <button class="btn-flat btn-flat-primary" onclick="switchState('downloading', document.querySelectorAll('.state-btn')[1])">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="1 4 1 10 7 10"/>
+              <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+            </svg>
+            Retry
+          </button>
+        `;
+      }
+    }
+
+    function toggleTheme() {
+      const body = document.body;
+      const current = body.getAttribute('data-theme');
+      const next = current === 'dark' ? 'light' : 'dark';
+      body.setAttribute('data-theme', next);
+
+      const icon = document.getElementById('theme-icon');
+      const text = document.getElementById('theme-text');
+      if (next === 'light') {
+        icon.textContent = '🌙';
+        text.textContent = 'Dark Mode';
+      } else {
+        icon.textContent = '☀️';
+        text.textContent = 'Light Mode';
+      }
+    }
+  </script>
+</body>
+</html>

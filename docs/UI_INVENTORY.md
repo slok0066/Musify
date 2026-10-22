@@ -6,8 +6,8 @@ Simple list of every screen and what's on it, top to bottom.
 
 ## Global (on every screen)
 
-- Bottom tab bar: HOME · SEARCH · LIBRARY · SETTINGS (icons + labels, live tab in the signal colour)
-- Mini player card (above tab bar, when a song is loaded): artwork, title, artist, bitrate badge, 8D button, play/pause, next, progress line
+- Bottom tab bar: HOME · SEARCH · LIBRARY · SETTINGS
+- Mini player (above tab bar, when a song is loaded): artwork, title, artist, 8D button, play/pause, next
 - Toast messages (small pop-ups for confirmations)
 - Offline strip (only when there's no connection)
 
@@ -15,7 +15,7 @@ Simple list of every screen and what's on it, top to bottom.
 
 ## 1. HOME
 
-- Header: MUSIFY wordmark + "// HOME" line (telemetry at right) + refresh button
+- Header: " // HOME" + refresh button
 - Filter pills: ALL / MUSIC / 8D SPATIAL PICKS / OFFLINE READY
 - Jump Back In — 6 tiles (Liked Songs, Offline Vault + 4 recent collections)
 - Continue Listening rail
@@ -37,7 +37,8 @@ Simple list of every screen and what's on it, top to bottom.
 
 ## 2. SEARCH
 
-- Header: MUSIFY wordmark + "// SEARCH" line + search field
+- Header: " SEARCH"
+- Search field
 - Facet pills (after searching): ALL / SONGS / ARTISTS / ALBUMS / PLAYLISTS
 - Before typing: Recent Searches (up to 6) + Browse Genres grid (8 tiles)
 - Results: Top Result card, Songs list, LOAD MORE button, Artists rail, Albums rail, Playlists rail
@@ -46,7 +47,7 @@ Simple list of every screen and what's on it, top to bottom.
 
 ## 3. LIBRARY
 
-- Header: MUSIFY wordmark + "// LIBRARY" line (counts at right) + import button + grid/list toggle
+- Header: " LIBRARY" + import button + grid/list toggle
 - Counts line: "N items // N liked // N offline"
 - Filter pills: ALL / PLAYLISTS / LIKED / DOWNLOADS / ALBUMS / ARTISTS
 - Filter field (search inside library)
@@ -102,16 +103,15 @@ Simple list of every screen and what's on it, top to bottom.
 ## 7. NOW PLAYING (full screen)
 
 - Top bar: back, "NOW PLAYING" + source, queue button, ⋮
-- Big artwork + SPATIAL 8D badge (when on)
+- Big artwork + PLAYING badge + 8D badge (when on)
 - Title, artist, album · year
 - Heart (like) + download buttons
-- Status pill: PLAYING/PAUSED + bitrate
 - Status line (error / saving offline % / headphone hint)
+- 8D module: 8D AUDIO button, CALIBRATE button, orbit info line
 - Seek bar with elapsed / total times
 - Transport: shuffle, previous, play/pause, next, repeat
-- Action strip: LYRICS / SPATIAL 8D (long-press = calibrate) / QUEUE / SLEEP timer
-- 8D orbit info line + CALIBRATE link
-- Volume pill (icon, slider, %)
+- Buttons: LYRICS / QUEUE / SLEEP timer
+- Volume slider
 - Spectrum analyser (FFT / waveform / off)
 
 ---
