@@ -1,8 +1,8 @@
 {
-  "version": "1.0.16",
-  "build": 17,
-  "release_notes": "• Playback Engine Stability: Expanded cache buffer to 512 MB with 30-minute protection, preventing abrupt playback halts after 2–3 songs\n• Seamless Repeat Mode: Tracks loop continuously when repeat is enabled without stream or buffer exhaustion\n• Live Playlist Sync: Track highlights and playing equalizer indicators update instantly when tracks change in playlists, collections, and search\n• Quick Spatial 8D & Shuffle: Added 8D Audio button and Shuffle controls directly to Home featured cards and Android Lock Screen / Notification bar\n• Full-Screen Minimal Updater: Redesigned in-app update experience with clean flat surfaces, full changelog viewer, and zero glow or neon effects",
-  "download_url": "https://github.com/slok0066/Musify/releases/download/v1.0.16/app-arm64-v8a-release.apk",
-  "apk_url": "https://github.com/slok0066/Musify/releases/download/v1.0.16/app-arm64-v8a-release.apk",
+  "version": "1.0.19",
+  "build": 20,
+  "release_notes": "• Low-End Device Optimizations: Disabled heavy OLED canvas grain, decoupled mini-player marquee ticker, downsampled palette quantization, and reduced memory usage for lag-free performance on all phones\n• Song Slider Seek Fix: Fixed 20-30s playback freeze when seeking; range streaming requests are guarded to prevent stream cancellation storms\n• Volume Disparity Fix: Initial normal playback volume now starts at full volume without needing to toggle 8D on and off\n• Clean Minimal UI Redesign: Removed shuffle and 8D buttons from home hero rotating cards, removed Direct Audio Stream strip, improved Search page, and removed button glow in Settings",
+  "download_url": "https://github.com/slok0066/Musify/releases/download/v1.0.19/app-arm64-v8a-release.apk",
+  "apk_url": "https://github.com/slok0066/Musify/releases/download/v1.0.19/app-arm64-v8a-release.apk",
   "mandatory": false
 }
