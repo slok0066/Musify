@@ -1,7 +1,7 @@
 {
   "version": "1.0.19",
   "build": 20,
-  "release_notes": "• Low-End Device Optimizations: Disabled heavy OLED canvas grain, decoupled mini-player marquee ticker, downsampled palette quantization, and reduced memory usage for lag-free performance on all phones\n• Song Slider Seek Fix: Fixed 20-30s playback freeze when seeking; range streaming requests are guarded to prevent stream cancellation storms\n• Volume Disparity Fix: Initial normal playback volume now starts at full volume without needing to toggle 8D on and off\n• Clean Minimal UI Redesign: Removed shuffle and 8D buttons from home hero rotating cards, removed Direct Audio Stream strip, improved Search page, and removed button glow in Settings",
+  "release_notes": "• Low-end device optimization\n• Fixed song slider seek error\n• Fixed 8D audio initial volume\n• Clean and minimal UI redesign",
   "download_url": "https://github.com/slok0066/Musify/releases/download/v1.0.19/app-arm64-v8a-release.apk",
   "apk_url": "https://github.com/slok0066/Musify/releases/download/v1.0.19/app-arm64-v8a-release.apk",
   "mandatory": false
