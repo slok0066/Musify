@@ -123,7 +123,7 @@ class SwissTokens extends ThemeExtension<SwissTokens> {
     dropShadow: Color(0x55000000),
     innerShadow: Color(0xCC000000),
     innerHighlight: Color(0x0FFFFFFF),
-    grainOpacity: 0.008,
+    grainOpacity: 0.0,
   );
 
   /// **Monochrome Alabaster** — the light chassis (White with Black accents).
@@ -174,19 +174,8 @@ class SwissTokens extends ThemeExtension<SwissTokens> {
     ),
   ];
 
-  /// The filament bloom — champagne halo for latched/active hardware.
-  List<BoxShadow> ledGlow(Color color, {double strength = 1}) => [
-    BoxShadow(
-      color: color.withValues(alpha: 0.45 * strength),
-      blurRadius: 10 * strength,
-      spreadRadius: 0.5,
-    ),
-    BoxShadow(
-      color: color.withValues(alpha: 0.18 * strength),
-      blurRadius: 22 * strength,
-      spreadRadius: 1.5,
-    ),
-  ];
+  /// Follows minimal-ui: no glow or bloom effects.
+  List<BoxShadow> ledGlow(Color color, {double strength = 1}) => const [];
 
   @override
   SwissTokens copyWith({

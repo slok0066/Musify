@@ -29,6 +29,7 @@ class MiniPlayerBar extends StatelessWidget {
           previous.isPlaying != next.isPlaying ||
           previous.isBuffering != next.isBuffering ||
           previous.is8D != next.is8D ||
+          previous.shuffle != next.shuffle ||
           previous.errorText != next.errorText ||
           previous.headphones != next.headphones,
       builder: (context, state) {
@@ -171,48 +172,50 @@ class _Bar extends StatelessWidget {
                   ),
                   // The progress hairline, tucked inside the card's bottom
                   // edge: buffered band first, playhead on top.
-                  ValueListenableBuilder<Duration>(
-                    valueListenable: engine.position,
-                    builder: (context, position, _) {
-                      final total = engine.duration.value.inMilliseconds;
-                      final played = total <= 0
-                          ? 0.0
-                          : (position.inMilliseconds / total).clamp(0.0, 1.0);
-                      final buffered = total <= 0
-                          ? 0.0
-                          : (engine.buffered.value.inMilliseconds / total)
-                              .clamp(0.0, 1.0);
-                      return Padding(
-                        padding: const EdgeInsets.fromLTRB(
-                            SwissGrid.sm, 0, SwissGrid.sm, SwissGrid.sm),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(2),
-                          child: SizedBox(
-                            height: 3,
-                            child: Stack(
-                              children: [
-                                Positioned.fill(
-                                  child: ColoredBox(
-                                    color:
-                                        t.hairlineStrong.withValues(alpha: 0.4),
+                  RepaintBoundary(
+                    child: ValueListenableBuilder<Duration>(
+                      valueListenable: engine.position,
+                      builder: (context, position, _) {
+                        final total = engine.duration.value.inMilliseconds;
+                        final played = total <= 0
+                            ? 0.0
+                            : (position.inMilliseconds / total).clamp(0.0, 1.0);
+                        final buffered = total <= 0
+                            ? 0.0
+                            : (engine.buffered.value.inMilliseconds / total)
+                                .clamp(0.0, 1.0);
+                        return Padding(
+                          padding: const EdgeInsets.fromLTRB(
+                              SwissGrid.sm, 0, SwissGrid.sm, SwissGrid.sm),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(2),
+                            child: SizedBox(
+                              height: 3,
+                              child: Stack(
+                                children: [
+                                  Positioned.fill(
+                                    child: ColoredBox(
+                                      color:
+                                          t.hairlineStrong.withValues(alpha: 0.4),
+                                    ),
                                   ),
-                                ),
-                                FractionallySizedBox(
-                                  widthFactor: buffered,
-                                  alignment: Alignment.centerLeft,
-                                  child: ColoredBox(color: t.hairlineStrong),
-                                ),
-                                FractionallySizedBox(
-                                  widthFactor: played,
-                                  alignment: Alignment.centerLeft,
-                                  child: ColoredBox(color: t.accent),
-                                ),
-                              ],
+                                  FractionallySizedBox(
+                                    widthFactor: buffered,
+                                    alignment: Alignment.centerLeft,
+                                    child: ColoredBox(color: t.hairlineStrong),
+                                  ),
+                                  FractionallySizedBox(
+                                    widthFactor: played,
+                                    alignment: Alignment.centerLeft,
+                                    child: ColoredBox(color: t.accent),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                      );
-                    },
+                        );
+                      },
+                    ),
                   ),
                 ],
               ),

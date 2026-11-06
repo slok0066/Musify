@@ -6,6 +6,12 @@
       "sourceType": "github",
       "skillPath": "flutter-improve-design/SKILL.md",
       "computedHash": "5071b86878c3fa1b9f493eebdd0fcf1293ed56bf0c2bd7086dc15bebe7729924"
+    },
+    "untangle-codebase": {
+      "source": "caldoai/skills",
+      "sourceType": "github",
+      "skillPath": "skills/untangle-codebase/SKILL.md",
+      "computedHash": "72ed3e75cb6b771b69b084772322d9c715fe843c28733f54091f0c3000fe5052"
     }
   }
 }

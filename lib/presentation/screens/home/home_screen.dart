@@ -157,7 +157,6 @@ class _Body extends StatelessWidget {
               state.filter == HomeFilter.offline)
             SliverToBoxAdapter(child: _QuickSongRail(state: state)),
           ..._sections(context, state),
-          const SliverToBoxAdapter(child: _AudioOutputStrip()),
           const SliverToBoxAdapter(child: SizedBox(height: SwissGrid.xl)),
         ],
       ],
@@ -578,64 +577,60 @@ class SongRectangleCard extends StatelessWidget {
     final t = SwissTokens.of(context);
     final highResUrl = JioSaavnClient.hires(track.imageUrl, size: 500);
 
-    return Container(
-      width: width,
-      margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () {
-          Haptics.tap();
-          onTap();
-        },
-        onLongPress: () {
-          Haptics.commit();
-          onOptions?.call();
-        },
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: t.hairline, width: 1.2),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.35),
-                blurRadius: 16,
-                offset: const Offset(0, 7),
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(21),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                // Full Crystal-Clear High-Resolution Poster Artwork
-                highResUrl.isEmpty
-                    ? Container(
-                        color: t.surfaceSunken,
-                        child: Center(
-                          child: Icon(Icons.music_note, color: t.inkFaint, size: 48),
-                        ),
-                      )
-                    : CachedNetworkImage(
-                        imageUrl: highResUrl,
-                        fit: BoxFit.cover,
-                        filterQuality: FilterQuality.high,
-                        fadeInDuration: const Duration(milliseconds: 150),
-                        maxWidthDiskCache: 1200,
-                        maxHeightDiskCache: 1200,
-                        placeholder: (context, _) => Container(
+    return RepaintBoundary(
+      child: Container(
+        width: width,
+        margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            Haptics.tap();
+            onTap();
+          },
+          onLongPress: () {
+            Haptics.commit();
+            onOptions?.call();
+          },
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: t.hairline, width: 1.2),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(21),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  // Full Crystal-Clear High-Resolution Poster Artwork
+                  highResUrl.isEmpty
+                      ? Container(
                           color: t.surfaceSunken,
                           child: Center(
-                            child: Icon(Icons.music_note, color: t.inkFaint, size: 40),
+                            child: Icon(Icons.music_note, color: t.inkFaint, size: 48),
+                          ),
+                        )
+                      : CachedNetworkImage(
+                          imageUrl: highResUrl,
+                          fit: BoxFit.cover,
+                          filterQuality: FilterQuality.medium,
+                          fadeInDuration: const Duration(milliseconds: 150),
+                          memCacheWidth: 600,
+                          memCacheHeight: 800,
+                          maxWidthDiskCache: 720,
+                          maxHeightDiskCache: 960,
+                          placeholder: (context, _) => Container(
+                            color: t.surfaceSunken,
+                            child: Center(
+                              child: Icon(Icons.music_note, color: t.inkFaint, size: 40),
+                            ),
+                          ),
+                          errorWidget: (context, _, __) => Container(
+                            color: t.surfaceSunken,
+                            child: Center(
+                              child: Icon(Icons.music_note, color: t.inkFaint, size: 40),
+                            ),
                           ),
                         ),
-                        errorWidget: (context, _, __) => Container(
-                          color: t.surfaceSunken,
-                          child: Center(
-                            child: Icon(Icons.music_note, color: t.inkFaint, size: 40),
-                          ),
-                        ),
-                      ),
 
                 // Ambient Gradient Overlay for depth and text legibility
                 // Kept clean: Top 45% has 0 tint so artwork is completely clear!
@@ -654,38 +649,6 @@ class SongRectangleCard extends StatelessWidget {
                   ),
                 ),
 
-                // Top Badge: Featured Hit Indicator
-                Positioned(
-                  top: 12,
-                  left: 14,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.60),
-                      borderRadius: BorderRadius.circular(9),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.18),
-                        width: 0.8,
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.local_fire_department_rounded, size: 13, color: t.accent),
-                        const SizedBox(width: 4),
-                        Text(
-                          'FEATURED HIT',
-                          style: SwissType.micro.copyWith(
-                            color: Colors.white,
-                            fontSize: 9.5,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.8,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
 
                 // Bottom Strip: Song Title, Artist and Play Pill
                 Positioned(
@@ -739,132 +702,43 @@ class SongRectangleCard extends StatelessWidget {
                       BlocBuilder<PlayerCubit, PlayerState>(
                         buildWhen: (previous, next) =>
                             previous.track?.id != next.track?.id ||
-                            previous.isPlaying != next.isPlaying ||
-                            previous.is8D != next.is8D ||
-                            previous.shuffle != next.shuffle,
+                            previous.isPlaying != next.isPlaying,
                         builder: (context, playerState) {
                           final player = context.read<PlayerCubit>();
                           final isCurrent = playerState.track?.id == track.id;
                           final isPlaying = isCurrent && playerState.isPlaying;
-                          final is8D = playerState.is8D;
-                          final isShuffle = playerState.shuffle;
 
-                          return Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              // Shuffle button
-                              GestureDetector(
-                                behavior: HitTestBehavior.opaque,
-                                onTap: () {
-                                  Haptics.tap();
-                                  player.toggleShuffle();
-                                },
-                                child: Container(
-                                  width: 34,
-                                  height: 34,
-                                  decoration: BoxDecoration(
-                                    color: isShuffle
-                                        ? t.accent
-                                        : Colors.black.withValues(alpha: 0.55),
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: isShuffle
-                                          ? t.accent
-                                          : Colors.white.withValues(alpha: 0.25),
-                                      width: 1,
-                                    ),
-                                  ),
-                                  child: Center(
-                                    child: Icon(
-                                      Icons.shuffle,
-                                      size: 16,
-                                      color: isShuffle ? t.accentInk : Colors.white,
-                                    ),
-                                  ),
+                          return GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () {
+                              Haptics.tap();
+                              if (isCurrent) {
+                                player.togglePlayPause();
+                              } else {
+                                onTap();
+                              }
+                            },
+                            child: Container(
+                              width: 38,
+                              height: 38,
+                              decoration: BoxDecoration(
+                                color: t.accent,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: t.hairline,
+                                  width: 1,
                                 ),
                               ),
-                              const SizedBox(width: 6),
-
-                              // 8D Audio button
-                              GestureDetector(
-                                behavior: HitTestBehavior.opaque,
-                                onTap: () {
-                                  Haptics.commit();
-                                  player.set8D(!is8D);
-                                },
-                                child: Container(
-                                  height: 34,
-                                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                                  decoration: BoxDecoration(
-                                    color: is8D
-                                        ? t.accent
-                                        : Colors.black.withValues(alpha: 0.55),
-                                    borderRadius: BorderRadius.circular(17),
-                                    border: Border.all(
-                                      color: is8D
-                                          ? t.accent
-                                          : Colors.white.withValues(alpha: 0.25),
-                                      width: 1,
-                                    ),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        Icons.surround_sound,
-                                        size: 15,
-                                        color: is8D ? t.accentInk : Colors.white,
-                                      ),
-                                      const SizedBox(width: 3),
-                                      Text(
-                                        '8D',
-                                        style: SwissType.micro.copyWith(
-                                          color: is8D ? t.accentInk : Colors.white,
-                                          fontWeight: FontWeight.w700,
-                                          letterSpacing: 0.5,
-                                          fontSize: 10,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+                              child: Center(
+                                child: Icon(
+                                  isPlaying
+                                      ? Icons.pause_rounded
+                                      : Icons.play_arrow_rounded,
+                                  size: 22,
+                                  color: t.accentInk,
                                 ),
                               ),
-                              const SizedBox(width: 6),
-
-                              // Flat Clean Play / Pause button (NO GLOW, NO GRADIENT)
-                              GestureDetector(
-                                behavior: HitTestBehavior.opaque,
-                                onTap: () {
-                                  Haptics.tap();
-                                  if (isCurrent) {
-                                    player.togglePlayPause();
-                                  } else {
-                                    onTap();
-                                  }
-                                },
-                                child: Container(
-                                  width: 38,
-                                  height: 38,
-                                  decoration: BoxDecoration(
-                                    color: t.accent,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: t.hairline,
-                                      width: 1,
-                                    ),
-                                  ),
-                                  child: Center(
-                                    child: Icon(
-                                      isPlaying
-                                          ? Icons.pause_rounded
-                                          : Icons.play_arrow_rounded,
-                                      size: 22,
-                                      color: t.accentInk,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
+                            ),
                           );
                         },
                       ),
@@ -876,8 +750,9 @@ class SongRectangleCard extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 /// Auto-sliding wide poster banner carousel showing latest famous songs.
@@ -1103,76 +978,4 @@ class _QuickSongRailState extends State<_QuickSongRail> {
   }
 }
 
-class _AudioOutputStrip extends StatelessWidget {
-  const _AudioOutputStrip();
-
-  @override
-  Widget build(BuildContext context) {
-    final t = SwissTokens.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: SwissGrid.gutter,
-        vertical: SwissGrid.sm,
-      ),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: t.surfaceRaised,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: t.hairline, width: 1),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(
-                color: t.surfaceSunken,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(Icons.headphones, size: 18, color: t.accent),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Direct Audio Stream',
-                    style: SwissType.bodySm.copyWith(
-                      color: t.ink,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 1),
-                  Text(
-                    'Lossless 32-bit / 384kHz · Studio Master',
-                    style: SwissType.micro.copyWith(color: t.inkMuted),
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: t.surfaceSunken,
-                borderRadius: BorderRadius.circular(SwissTokens.radiusFull),
-                border: Border.all(color: t.hairline),
-              ),
-              child: Text(
-                'DIRECT',
-                style: SwissType.micro.copyWith(
-                  color: t.accent,
-                  fontSize: 9,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 

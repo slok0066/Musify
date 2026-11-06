@@ -57,6 +57,9 @@ class ArtworkColorExtractor {
       final picture = recorder.endRecording();
       final tinyImg = await picture.toImage(1, 1);
       final byteData = await tinyImg.toByteData(format: ui.ImageByteFormat.rawRgba);
+      picture.dispose();
+      tinyImg.dispose();
+      uiImage.dispose();
 
       if (byteData != null) {
         final r = byteData.getUint8(0);

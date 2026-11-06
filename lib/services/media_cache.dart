@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -1112,8 +1113,11 @@ class StreamSession {
   String? get error => _transfer?.error;
 
   /// Proactively repositions the underlying transfer to [offset] on seek.
-  void jumpTo(int offset) {
-    _transfer?.jumpTo(offset);
+  ///
+  /// [end] is the end of the window the caller is about to read. A window that
+  /// is already on disk is not moved; a half-covered one still is.
+  void jumpTo(int offset, [int? end]) {
+    _transfer?.jumpTo(offset, end);
   }
 
   /// The whole file this session reads from, or `null` while it is still
@@ -1209,6 +1213,13 @@ class _LiveTransfer {
   int _readers = 0;
   int _cursor = 0;
   int? _restartAt;
+  int? _connectingFrom;
+  bool _supportsRange = true;
+
+  /// Bumped by every [jumpTo]. A read from before the jump must not steer the
+  /// connection back to its old position: that is what made a seek ping-pong
+  /// between the old and the new window until the read timed out.
+  int _generation = 0;
   int _reported = 0;
   int _retries = 0;
   bool _stopped = false;
@@ -1220,7 +1231,7 @@ class _LiveTransfer {
   static const int _jumpBytes = 64 * 1024;
 
   /// How long [readRange] waits before giving up on a range.
-  static const Duration _readTimeout = Duration(seconds: 25);
+  static const Duration _readTimeout = Duration(seconds: 8);
 
   bool get failed => _error != null;
   bool get stopped => _stopped;
@@ -1246,10 +1257,28 @@ class _LiveTransfer {
     cache._registerFinisher(this);
   }
 
-  /// Proactively reposition the connection to [offset] on seek so reads are instant.
-  void jumpTo(int offset) {
-    if (complete || _stopped || failed) return;
-    if (_covers(offset, offset + 1)) return;
+  /// Proactively repositions the connection to [offset] on seek so reads are
+  /// instant. [end] is the end of the window that will be read.
+  void jumpTo(int offset, [int? end]) {
+    if (complete || _stopped || failed || !_supportsRange) return;
+    final to = math.min(end ?? offset + 1, total);
+    // The whole window is already here: no connection is worth moving.
+    if (_covers(offset, to)) return;
+    // The pump is inside the window, or close enough behind it to reach it
+    // before a reconnect would: let it finish instead of re-buying the gap.
+    if (_cursor >= offset && _cursor <= to) return;
+    if (_cursor < offset && offset - _cursor <= _jumpBytes) return;
+    if (_connectingFrom != null &&
+        _connectingFrom! <= offset &&
+        offset <= _connectingFrom! + _jumpBytes) {
+      return;
+    }
+    if (_restartAt != null &&
+        _restartAt! <= offset &&
+        offset <= _restartAt! + _jumpBytes) {
+      return;
+    }
+    _generation++;
     _restartAt = offset;
     final token = _token;
     if (token != null && !token.isCancelled) {
@@ -1267,11 +1296,14 @@ class _LiveTransfer {
     if (to > total) to = total;
     if (to <= from) return Uint8List(0);
 
+    final generation = _generation;
     final deadline = DateTime.now().add(_readTimeout);
     while (!_covers(from, to)) {
       if (_stopped || failed) return null;
       if (!DateTime.now().isBefore(deadline)) return null;
-      _maybeJump(from);
+      // Only the reader on the current side of the last jump may steer the
+      // connection; an older read just waits for its bytes or times out.
+      if (generation == _generation) _maybeJump(from, to);
       await Future<void>.delayed(const Duration(milliseconds: 20));
     }
     return _readFromDisk(from, to);
@@ -1300,11 +1332,25 @@ class _LiveTransfer {
 
   /// Moves the connection when the read head outruns it by more than
   /// [_jumpBytes], instead of making the listener wait for bytes in between.
-  void _maybeJump(int start) {
-    if (complete || _stopped || failed) return;
-    if (_covers(start, start + 1)) return;
-    if (_cursor <= start && start <= _cursor + _jumpBytes) return;
-    if (_restartAt != null && _restartAt! <= start && start <= _restartAt! + _jumpBytes) return;
+  ///
+  /// The *whole* requested range is checked: a covered first byte says nothing
+  /// about the rest of the window, and treating it as "here" left the read
+  /// waiting for a sequential download from wherever the pump happened to be.
+  void _maybeJump(int start, int end) {
+    if (complete || _stopped || failed || !_supportsRange) return;
+    if (_covers(start, end)) return;
+    if (_cursor >= start && _cursor <= end) return;
+    if (_cursor < start && start - _cursor <= _jumpBytes) return;
+    if (_connectingFrom != null &&
+        _connectingFrom! <= start &&
+        start <= _connectingFrom! + _jumpBytes) {
+      return;
+    }
+    if (_restartAt != null &&
+        _restartAt! <= start &&
+        start <= _restartAt! + _jumpBytes) {
+      return;
+    }
     _restartAt = start;
     final token = _token;
     if (token != null && !token.isCancelled) token.cancel('reposition');
@@ -1336,6 +1382,7 @@ class _LiveTransfer {
   Future<bool> _pumpFrom(int from) async {
     final token = CancelToken();
     _token = token;
+    _connectingFrom = from;
     try {
       final response = await cache._dio.get<ResponseBody>(
         url,
@@ -1351,7 +1398,10 @@ class _LiveTransfer {
 
       // A server that ignores `Range` answers 200 with the whole file: write it
       // from zero rather than at the offset we asked for.
-      var offset = (from == 0 || response.statusCode == 206) ? from : 0;
+      final acceptsRange = from == 0 || response.statusCode == 206;
+      if (!acceptsRange) _supportsRange = false;
+      var offset = acceptsRange ? from : 0;
+      _connectingFrom = offset;
       final write = _write ??= await partial.open(mode: FileMode.write);
       _cursor = offset;
 
@@ -1394,6 +1444,11 @@ class _LiveTransfer {
       return true;
     } catch (e) {
       return _fail('$e');
+    } finally {
+      if (identical(_token, token)) {
+        _token = null;
+        _connectingFrom = null;
+      }
     }
   }
 

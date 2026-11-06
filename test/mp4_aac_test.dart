@@ -232,6 +232,29 @@ void main() {
     });
   });
 
+  group('Mp4AacIndex.moovEndIn', () {
+    test('reports where a complete faststart moov ends', () {
+      final head = _mp4Head();
+      expect(Mp4AacIndex.moovEndIn(head), head.length);
+    });
+
+    test('reports the full size of a moov larger than the window', () {
+      final head = _mp4Head();
+      final moovAt = head.length - _moov().length;
+      final moovSize = _moov().length + 500 * 1024;
+      head.setRange(moovAt, moovAt + 4, _u32(moovSize));
+      expect(Mp4AacIndex.parse(head, fileLength: _fileLength), isNull,
+          reason: 'the truncated table is unreadable on its own');
+      expect(Mp4AacIndex.moovEndIn(head), moovAt + moovSize,
+          reason: 'the box header still knows where it ends');
+    });
+
+    test('returns null when the window does not start with a moov', () {
+      final mdat = _box('mdat', List.filled(32, 0));
+      expect(Mp4AacIndex.moovEndIn(mdat), isNull);
+    });
+  });
+
   group('Mp4AacIndex.parseAnywhere', () {
     test('finds a moov that was written after the media', () {
       // A tail request: the window starts in the middle of mdat, so the box

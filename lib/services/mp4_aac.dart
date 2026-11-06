@@ -98,6 +98,34 @@ class Mp4AacIndex {
     }
   }
 
+  /// The end offset of a top-level `moov` that starts inside [window].
+  ///
+  /// A faststart `moov` can be larger than the head window the player reads
+  /// (a long sample table easily reaches hundreds of KB), in which case [parse]
+  /// sees a truncated box and gives up. The box header still says where the box
+  /// ends, so the caller can fetch exactly the missing bytes. Returns `null`
+  /// when no top-level `moov` starts in the window.
+  static int? moovEndIn(Uint8List window) {
+    var at = 0;
+    while (at + 8 <= window.length) {
+      var size = _u32(window, at);
+      final type = _ascii(window, at + 4, 4);
+      var header = 8;
+      if (size == 1) {
+        if (at + 16 > window.length) return null;
+        size = _u64(window, at + 8);
+        header = 16;
+      } else if (size == 0) {
+        return null; // "until end of file": the end is not in this window.
+      }
+      if (size < header) return null;
+      if (type == 'moov') return at + size;
+      if (at + size > window.length) return null;
+      at += size;
+    }
+    return null;
+  }
+
   static Mp4AacIndex? _fromTrak(Uint8List d, _Box trak, int? fileLength) {
     final mdia = _first(_boxes(d, trak.payload, trak.end), 'mdia');
     if (mdia == null) return null;

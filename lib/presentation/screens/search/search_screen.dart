@@ -524,34 +524,13 @@ class _TopResult extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'TOP RESULT',
-                style: SwissType.label.copyWith(
-                  color: t.inkMuted,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 1.2,
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                decoration: BoxDecoration(
-                  color: t.surfaceRaised,
-                  borderRadius: BorderRadius.circular(SwissTokens.radiusFull),
-                  border: Border.all(color: t.hairline),
-                ),
-                child: Text(
-                  'MATCH 99.4%',
-                  style: SwissType.micro.copyWith(
-                    color: t.accent,
-                    fontSize: 9,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
+          Text(
+            'TOP RESULT',
+            style: SwissType.label.copyWith(
+              color: t.inkMuted,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1.2,
+            ),
           ),
           const SizedBox(height: SwissGrid.sm),
           Container(
@@ -577,19 +556,10 @@ class _TopResult extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            children: [
-                              SwissBadge(
-                                text: '8D SPATIAL',
-                                color: t.accent,
-                              ),
-                              if (track.isDownloaded) ...[
-                                const SizedBox(width: 4),
-                                SwissBadge(text: 'OFFLINE', color: t.positive),
-                              ],
-                            ],
-                          ),
-                          const SizedBox(height: 6),
+                          if (track.isDownloaded) ...[
+                            SwissBadge(text: 'OFFLINE', color: t.positive),
+                            const SizedBox(height: 6),
+                          ],
                           Text(
                             track.title,
                             style: SwissType.displaySm.copyWith(
@@ -627,28 +597,21 @@ class _TopResult extends StatelessWidget {
                       },
                       borderRadius: BorderRadius.circular(SwissTokens.radiusFull),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         decoration: BoxDecoration(
                           color: t.accent,
                           borderRadius: BorderRadius.circular(SwissTokens.radiusFull),
-                          boxShadow: [
-                            BoxShadow(
-                              color: t.accent.withValues(alpha: 0.25),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.play_arrow, size: 16, color: t.surfaceSunken),
+                            Icon(Icons.play_arrow_rounded, size: 18, color: t.accentInk),
                             const SizedBox(width: 4),
                             Text(
                               'Play Now',
-                              style: SwissType.bodySm.copyWith(
-                                color: t.surfaceSunken,
-                                fontWeight: FontWeight.w600,
+                              style: SwissType.label.copyWith(
+                                color: t.accentInk,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
                           ],
@@ -668,36 +631,27 @@ class _TopResult extends StatelessWidget {
                       },
                       borderRadius: BorderRadius.circular(SwissTokens.radiusFull),
                       child: Container(
-                        width: 34,
                         height: 34,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
                         decoration: BoxDecoration(
                           color: t.surfaceSunken,
                           borderRadius: BorderRadius.circular(SwissTokens.radiusFull),
                           border: Border.all(color: t.hairline),
                         ),
-                        child: Icon(Icons.playlist_add, size: 17, color: t.ink),
-                      ),
-                    ),
-                    const Spacer(),
-                    Text(
-                      'FLAC · 24-BIT',
-                      style: SwissType.micro.copyWith(
-                        color: t.inkFaint,
-                        fontSize: 10,
-                        letterSpacing: 0.8,
-                      ),
-                    ),
-                    const SizedBox(width: 2),
-                    IconButton(
-                      icon: Icon(Icons.info_outline, size: 16, color: t.inkFaint),
-                      splashRadius: 16,
-                      constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                      padding: EdgeInsets.zero,
-                      onPressed: () => showTrackOptions(
-                        context,
-                        track,
-                        source: 'SEARCH // TOP RESULT',
-                        queueContext: queueContext,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.more_horiz, size: 16, color: t.ink),
+                            const SizedBox(width: 4),
+                            Text(
+                              'OPTIONS',
+                              style: SwissType.micro.copyWith(
+                                color: t.ink,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ],

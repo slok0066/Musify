@@ -220,7 +220,7 @@ class _BottomDock extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const MiniPlayerBar(),
+          const RepaintBoundary(child: MiniPlayerBar()),
           SwissNavBar(onTabSelected: onTabSelected),
         ],
       ),

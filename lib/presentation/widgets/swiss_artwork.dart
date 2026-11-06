@@ -48,6 +48,7 @@ class SwissArtwork extends StatelessWidget {
     // older build (or restored from a backup) can carry a 150×150 URL, and the
     // plate must not inherit that blur.
     final resolvedUrl = hiresArtwork(imageUrl);
+    final cacheDim = size != null ? (size! * 2.5).round().clamp(96, 750) : 500;
 
     Widget content = ClipRRect(
       borderRadius: circular
@@ -67,6 +68,10 @@ class SwissArtwork extends StatelessWidget {
                 fit: BoxFit.cover,
                 fadeInDuration: const Duration(milliseconds: 180),
                 filterQuality: filterQuality,
+                memCacheWidth: cacheDim,
+                memCacheHeight: cacheDim,
+                maxWidthDiskCache: cacheDim,
+                maxHeightDiskCache: cacheDim,
                 placeholder: (context, _) => const SwissSkeleton(
                   height: double.infinity,
                   radius: SwissTokens.radius,
@@ -139,6 +144,8 @@ class MosaicArtwork extends StatelessWidget {
         imageUrl: hiresArtwork(covers.first),
         fit: BoxFit.cover,
         filterQuality: FilterQuality.medium,
+        memCacheWidth: 320,
+        memCacheHeight: 320,
       );
     } else {
       body = Column(
@@ -173,6 +180,8 @@ class MosaicArtwork extends StatelessWidget {
               imageUrl: hiresArtwork(url),
               fit: BoxFit.cover,
               filterQuality: FilterQuality.medium,
+              memCacheWidth: 200,
+              memCacheHeight: 200,
             ),
     );
     return Row(

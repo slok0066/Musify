@@ -270,9 +270,6 @@ class _TactileKeycapState extends State<TactileKeycap> {
         color: fill,
         borderRadius: shape,
         border: Border.all(color: border, width: 1),
-        boxShadow: widget.glow && !_down
-            ? t.ledGlow(t.accent, strength: 0.85)
-            : null,
       ),
       child: DefaultTextStyle.merge(
         style: TextStyle(
@@ -389,7 +386,6 @@ class LedDot extends StatelessWidget {
           color: active ? c : t.hairline,
           width: 1,
         ),
-        boxShadow: active ? t.ledGlow(c) : null,
       ),
     );
   }
@@ -589,7 +585,6 @@ class SwissPill extends StatelessWidget {
             color: selected ? t.accent : t.hairline,
             width: 1,
           ),
-          boxShadow: selected ? t.ledGlow(t.accent, strength: 0.45) : null,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -662,7 +657,6 @@ class TactileSwitch extends StatelessWidget {
                 border: Border.all(
                   color: value ? t.accent : t.hairlineStrong,
                 ),
-                boxShadow: value ? t.ledGlow(t.accent, strength: 0.7) : null,
               ),
             ),
           ),
@@ -868,24 +862,26 @@ class _TextMarqueeState extends State<TextMarquee>
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) _sync();
         });
-        return ClipRect(
-          child: AnimatedBuilder(
-            animation: _controller,
-            builder: (context, _) {
-              return Transform.translate(
-                offset: Offset(-_offset(), 0),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    widget.text,
-                    style: widget.style,
-                    maxLines: 1,
-                    softWrap: false,
-                    overflow: TextOverflow.visible,
+        return RepaintBoundary(
+          child: ClipRect(
+            child: AnimatedBuilder(
+              animation: _controller,
+              builder: (context, _) {
+                return Transform.translate(
+                  offset: Offset(-_offset(), 0),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      widget.text,
+                      style: widget.style,
+                      maxLines: 1,
+                      softWrap: false,
+                      overflow: TextOverflow.visible,
+                    ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
         );
       },
