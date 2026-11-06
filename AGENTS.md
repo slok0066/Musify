@@ -29,4 +29,19 @@ Take the first option that fully works:
 
 Never cut: validation at trust boundaries, error handling that prevents data loss, security, accessibility, the calibration real hardware needs, anything the user asked for.
 
+## Strict Build, Release & UI Rules
+
+1. **Never build APK automatically**:
+   - Do NOT run `flutter build apk` on your own or assume an APK build is wanted.
+   - ALWAYS ask the user for explicit confirmation before building any APK file.
+
+2. **Never release or push updates automatically**:
+   - After creating or building an APK, do NOT automatically release the update, push to GitHub releases, or update remote `version.json`.
+   - ALWAYS ask the user for explicit confirmation before releasing the update to the app.
+
+3. **Clean and Minimal UI Standard (Never Clustered)**:
+   - Every UI component, screen, sheet, or card created or modified MUST be clean, aesthetic, and minimal.
+   - Never clutter the interface: avoid redundant buttons, cramped rows, fake telemetry badges, decorative noise, glowing bloom/shadows, and gradient buttons.
+   - Maintain flat surfaces, crisp 1px/0.5px hairline borders, and generous breathing room.
+
 (Yes, this file also applies to agents working on the ponytail repo itself. Especially to them.)
