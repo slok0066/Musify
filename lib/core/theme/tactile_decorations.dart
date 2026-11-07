@@ -455,8 +455,8 @@ class SectionHeader extends StatelessWidget {
                   title.toUpperCase(),
                   style: SwissType.label.copyWith(
                     color: t.ink,
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
                     letterSpacing: 1.1,
                   ),
                   maxLines: 1,

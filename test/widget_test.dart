@@ -5,6 +5,7 @@ import 'package:musify/core/theme/swiss_tokens.dart';
 import 'package:musify/core/theme/tactile_decorations.dart';
 import 'package:musify/core/utils/formatters.dart';
 import 'package:musify/presentation/screens/credits/full_credit_screen.dart';
+import 'package:musify/presentation/screens/onboarding/name_onboarding_screen.dart';
 import 'package:musify/presentation/widgets/collection_cards.dart';
 import 'package:musify/presentation/widgets/tactile_slider.dart';
 
@@ -300,11 +301,35 @@ void main() {
 
     expect(find.text('Created by a human being called Shlok'), findsOneWidget);
     expect(find.text('@king_togetherness'), findsOneWidget);
-    expect(find.text('ENTER MUSIFY'), findsOneWidget);
+    expect(find.text('CONTINUE'), findsOneWidget);
 
-    await tester.tap(find.text('ENTER MUSIFY'));
+    await tester.tap(find.text('CONTINUE'));
     await tester.pumpAndSettle();
 
     expect(dismissed, isTrue);
+  });
+
+  testWidgets('NameOnboardingScreen renders mascot and submits name',
+      (tester) async {
+    String? submittedName;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildMusifyTheme(SwissTokens.carbon),
+        home: NameOnboardingScreen(
+          initialName: 'Shlok',
+          onComplete: (name) => submittedName = name,
+        ),
+      ),
+    );
+
+    expect(find.text("What's your name?"), findsOneWidget);
+    expect(find.text('ENTER MUSIFY'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField), 'Alex');
+    await tester.tap(find.text('ENTER MUSIFY'));
+    await tester.pumpAndSettle();
+
+    expect(submittedName, 'Alex');
   });
 }

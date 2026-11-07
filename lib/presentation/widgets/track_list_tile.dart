@@ -25,7 +25,7 @@ class TrackListTile extends StatelessWidget {
     this.showArtwork = true,
     this.showBitrate = false,
     this.showDivider = false,
-    this.artworkSize = 48.0,
+    this.artworkSize = 52.0,
     this.padding,
     this.borderRadius,
     this.dense = false,
@@ -239,7 +239,7 @@ class TrackCard extends StatelessWidget {
     required this.track,
     required this.onTap,
     this.onOptions,
-    this.width = 160,
+    this.width = 176,
     this.isCurrent = false,
     this.caption,
     super.key,
@@ -284,7 +284,7 @@ class TrackCard extends StatelessWidget {
                 children: [
                   SwissArtwork(
                     imageUrl: track.imageUrl,
-                    radius: 12,
+                    radius: 14,
                     showBorder: false,
                     placeholderIcon: Icons.music_note,
                   ),
@@ -293,7 +293,7 @@ class TrackCard extends StatelessWidget {
                       child: DecoratedBox(
                         decoration: BoxDecoration(
                           color: t.bg.withValues(alpha: 0.62),
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(14),
                         ),
                       ),
                     ),
@@ -354,7 +354,7 @@ class TrackCard extends StatelessWidget {
                 style: SwissType.bodySm.copyWith(
                   color: isCurrent ? accent : t.ink,
                   fontWeight: FontWeight.w700,
-                  fontSize: 13,
+                  fontSize: 13.5,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -363,8 +363,9 @@ class TrackCard extends StatelessWidget {
               Text(
                 caption ?? track.displayArtist,
                 style: SwissType.bodyXs.copyWith(
-                  color: t.inkMuted,
-                  fontSize: 11.5,
+                  color: t.ink.withValues(alpha: 0.70),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,

@@ -83,6 +83,7 @@ class MusifySettings {
     this.prefetchNext = true,
     this.instantStart = true,
     this.hasSeenCredits = false,
+    this.userName = 'Shlok',
   });
 
   static const List<double> flatGains = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
@@ -123,6 +124,9 @@ class MusifySettings {
   /// True once the one-time first launch credits page has been dismissed.
   final bool hasSeenCredits;
 
+  /// User display name shown in home greeting.
+  final String userName;
+
   AudioQuality get effectiveStreamQuality => wifiQuality;
 
   bool get is8DCustomised =>
@@ -148,6 +152,7 @@ class MusifySettings {
     bool? prefetchNext,
     bool? instantStart,
     bool? hasSeenCredits,
+    String? userName,
   }) {
     return MusifySettings(
       wifiQuality: wifiQuality ?? this.wifiQuality,
@@ -169,6 +174,7 @@ class MusifySettings {
       prefetchNext: prefetchNext ?? this.prefetchNext,
       instantStart: instantStart ?? this.instantStart,
       hasSeenCredits: hasSeenCredits ?? this.hasSeenCredits,
+      userName: userName ?? this.userName,
     );
   }
 
@@ -192,6 +198,7 @@ class MusifySettings {
     'prefetchNext': prefetchNext,
     'instantStart': instantStart,
     'hasSeenCredits': hasSeenCredits,
+    'userName': userName,
   };
 
   static MusifySettings fromMap(Map<String, dynamic> map) {
@@ -250,6 +257,7 @@ class MusifySettings {
       prefetchNext: boolAt('prefetchNext', true),
       instantStart: boolAt('instantStart', true),
       hasSeenCredits: boolAt('hasSeenCredits', false),
+      userName: map['userName']?.toString() ?? 'Shlok',
     );
   }
 

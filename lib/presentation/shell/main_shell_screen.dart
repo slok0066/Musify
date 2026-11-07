@@ -10,6 +10,7 @@ import '../cubits/settings_cubit.dart';
 import '../screens/credits/full_credit_screen.dart';
 import '../screens/home/home_screen.dart';
 import '../screens/library/library_screen.dart';
+import '../screens/onboarding/name_onboarding_screen.dart';
 import '../screens/search/search_screen.dart';
 import '../screens/settings/settings_screen.dart';
 import 'mini_player_bar.dart';
@@ -38,11 +39,7 @@ class MainShellScreen extends StatelessWidget {
     // `hasSeenCredits == false` — which is how the page could appear on every
     // launch. Now an unread store shows the app instead, never the page.
     if (gate.loaded && !gate.seen) {
-      return FullCreditScreen(
-        onDismiss: () {
-          context.read<SettingsCubit>().setHasSeenCredits(true);
-        },
-      );
+      return const _FirstLaunchFlow();
     }
 
     return BlocListener<LibraryCubit, LibraryState>(
@@ -318,6 +315,37 @@ class _NavItem extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _FirstLaunchFlow extends StatefulWidget {
+  const _FirstLaunchFlow();
+
+  @override
+  State<_FirstLaunchFlow> createState() => _FirstLaunchFlowState();
+}
+
+class _FirstLaunchFlowState extends State<_FirstLaunchFlow> {
+  int _step = 0; // 0: Credits page, 1: Name entry page
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 320),
+      child: _step == 0
+          ? FullCreditScreen(
+              key: const ValueKey('credits_step'),
+              onDismiss: () => setState(() => _step = 1),
+            )
+          : NameOnboardingScreen(
+              key: const ValueKey('name_step'),
+              initialName: context.read<SettingsCubit>().state.settings.userName,
+              onComplete: (name) {
+                context.read<SettingsCubit>().setUserName(name);
+                context.read<SettingsCubit>().setHasSeenCredits(true);
+              },
+            ),
     );
   }
 }

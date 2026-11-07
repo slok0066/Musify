@@ -204,12 +204,12 @@ class _CollectionBody extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               SizedBox(
-                width: 132,
+                width: 124,
                 child: collection.imageUrl.isEmpty && mosaic.length > 1
-                    ? MosaicArtwork(urls: mosaic, size: 132)
+                    ? MosaicArtwork(urls: mosaic, size: 124)
                     : SwissArtwork(
                         imageUrl: collection.imageUrl,
-                        size: 132,
+                        size: 124,
                         circular: collection.isRound,
                         placeholderIcon: collection.isRound
                             ? Icons.person_outline
@@ -418,7 +418,7 @@ class _CollectionBody extends StatelessWidget {
                       index: i,
                       showArtwork: true,
                       showDivider: false,
-                      artworkSize: 48.0,
+                      artworkSize: 52.0,
                       isCurrent: playerState.track?.id == tracks[i].id,
                       isPlaying: playerState.isPlaying,
                       onTap: () => player.playTrack(
@@ -439,32 +439,11 @@ class _CollectionBody extends StatelessWidget {
           ),
         ],
 
-        // ----------------------------------------------------------- artist bio
-        if ((artistBio ?? '').trim().isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-                SwissGrid.gutter, SwissGrid.lg, SwissGrid.gutter, 0),
-            child: SwissPanel(
-              raised: true,
-              padding: const EdgeInsets.all(SwissGrid.md),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('ARTIST BIO',
-                      style: SwissType.label.copyWith(color: t.inkFaint)),
-                  const SizedBox(height: SwissGrid.sm),
-                  Text(artistBio!.trim(),
-                      style: SwissType.bodySm.copyWith(color: t.inkMuted)),
-                ],
-              ),
-            ),
-          ),
-
         if (similarArtists.isNotEmpty)
           SwissRail(
             index: similarArtists.length.toString().padLeft(2, '0'),
             title: 'SIMILAR ARTISTS',
-            height: 206,
+            height: 252,
             children: [
               for (final artist in similarArtists)
                 CollectionRailCard(

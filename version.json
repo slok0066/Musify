@@ -1,8 +1,8 @@
 {
-  "version": "1.0.19",
-  "build": 20,
-  "release_notes": "• Low-end device optimization\n\n• Fixed song slider seek error\n\n• Fixed 8D audio initial volume\n\n• Clean and minimal UI redesign\n\n\nFUTURE UPDATE:\n• Adding more libraries // songs",
-  "download_url": "https://github.com/slok0066/Musify/releases/download/v1.0.19/app-arm64-v8a-release.apk",
-  "apk_url": "https://github.com/slok0066/Musify/releases/download/v1.0.19/app-arm64-v8a-release.apk",
+  "version": "1.0.21",
+  "build": 22,
+  "release_notes": "• Mountain atmosphere header with dynamic time transitions\n• Personalized greeting with animated mascot onboarding\n• Favorite artists enlarged circular portraits\n• Minimal UI polish and cleaner layout",
+  "download_url": "https://github.com/slok0066/Musify/releases/download/v1.0.21/app-arm64-v8a-release.apk",
+  "apk_url": "https://github.com/slok0066/Musify/releases/download/v1.0.21/app-arm64-v8a-release.apk",
   "mandatory": false
 }

@@ -678,7 +678,7 @@ class _CollectionRail extends StatelessWidget {
     return SwissRail(
       index: index,
       title: title,
-      height: round ? 206 : 214,
+      height: 252,
       children: [
         for (final item in items)
           CollectionRailCard(

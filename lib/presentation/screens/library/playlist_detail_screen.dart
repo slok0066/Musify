@@ -292,7 +292,7 @@ class _PlaylistView extends StatelessWidget {
                             index: i,
                             showArtwork: true,
                             showDivider: false,
-                            artworkSize: 48.0,
+                            artworkSize: 52.0,
                             isCurrent: playerState.track?.id == tracks[i].id,
                             isPlaying: playerState.isPlaying,
                             onTap: () => player.playTrack(

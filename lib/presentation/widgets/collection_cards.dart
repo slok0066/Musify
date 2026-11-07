@@ -12,13 +12,15 @@ class CollectionRailCard extends StatelessWidget {
   const CollectionRailCard({
     required this.collection,
     required this.onTap,
-    this.width = 156,
+    this.width = 176,
+    this.subtitle,
     super.key,
   });
 
   final Collection collection;
   final VoidCallback onTap;
   final double width;
+  final String? subtitle;
 
   @override
   Widget build(BuildContext context) {
@@ -40,7 +42,7 @@ class CollectionRailCard extends StatelessWidget {
           children: [
             SwissArtwork(
               imageUrl: collection.imageUrl,
-              radius: 14,
+              radius: 16,
               circular: round,
               placeholderIcon:
                   round ? Icons.person_outline : Icons.album_outlined,
@@ -51,21 +53,27 @@ class CollectionRailCard extends StatelessWidget {
               textAlign: round ? TextAlign.center : TextAlign.start,
               style: SwissType.bodySm.copyWith(
                 color: t.ink,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w700,
+                fontSize: 13.5,
               ),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
-            const SizedBox(height: 2),
-            Text(
-              collection.subtitle.isEmpty
-                  ? collection.kindLabel
-                  : collection.subtitle,
-              textAlign: round ? TextAlign.center : TextAlign.start,
-              style: SwissType.micro.copyWith(color: t.inkFaint),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
+            if (subtitle != null && subtitle!.isNotEmpty) ...[
+              const SizedBox(height: 2),
+              Text(
+                subtitle!,
+                textAlign: round ? TextAlign.center : TextAlign.start,
+                style: TextStyle(
+                  fontFamily: 'PlusJakartaSans',
+                  color: t.ink.withValues(alpha: 0.70),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
           ],
         ),
       ),
@@ -80,7 +88,7 @@ class RailItemCard extends StatelessWidget {
     required this.item,
     required this.onOpenCollection,
     required this.onPlayTrack,
-    this.width = 156,
+    this.width = 176,
     super.key,
   });
 
@@ -114,7 +122,7 @@ class RailItemCard extends StatelessWidget {
               children: [
                 SwissArtwork(
                   imageUrl: item.imageUrl,
-                  radius: 14,
+                  radius: 16,
                   placeholderIcon:
                       item.isTrack ? Icons.music_note : Icons.album_outlined,
                 ),
@@ -139,20 +147,13 @@ class RailItemCard extends StatelessWidget {
             const SizedBox(height: SwissGrid.sm),
             Text(
               item.title,
-              style: SwissType.bodySm
-                  .copyWith(color: t.ink, fontWeight: FontWeight.w600),
+              style: SwissType.bodySm.copyWith(
+                color: t.ink,
+                fontWeight: FontWeight.w700,
+                fontSize: 13.5,
+              ),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 2),
-            Text(
-              item.isTrack ? 'TRACK' : (item.collection?.kindLabel ?? ''),
-              style: SwissType.micro.copyWith(
-                color: t.accent,
-                fontSize: 9,
-                fontWeight: FontWeight.w600,
-              ),
-              maxLines: 1,
             ),
           ],
         ),
@@ -309,7 +310,7 @@ class SwissRail extends StatelessWidget {
           trailing: trailing,
         ),
         SizedBox(
-          height: height ?? 228,
+          height: height ?? 252,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: SwissGrid.gutter),

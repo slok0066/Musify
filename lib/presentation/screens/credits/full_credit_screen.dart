@@ -99,7 +99,6 @@ class _FullCreditScreenState extends State<FullCreditScreen> {
 
   void _enterApp(BuildContext context) {
     Haptics.commit();
-    _markSeen(context);
     widget.onDismiss?.call();
   }
 
@@ -338,7 +337,7 @@ class _FullCreditScreenState extends State<FullCreditScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
-                          'ENTER MUSIFY',
+                          'CONTINUE',
                           style: SwissType.label.copyWith(
                             color: t.accentInk,
                             fontSize: 14,

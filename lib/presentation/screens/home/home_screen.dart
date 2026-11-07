@@ -6,17 +6,18 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../core/theme/swiss_tokens.dart';
 import '../../../core/theme/tactile_decorations.dart';
 import '../../../data/datasources/jiosaavn_client.dart';
+import '../../../data/models/collection.dart';
 import '../../../data/models/track.dart';
+import '../../../data/repositories/music_repository.dart';
 import '../../../services/service_locator.dart';
-import '../../../services/settings_service.dart';
 import '../../cubits/home_cubit.dart';
 import '../../cubits/navigation_cubit.dart';
 import '../../cubits/player_cubit.dart';
-import '../../cubits/settings_cubit.dart';
 import '../../navigation.dart';
 import '../../widgets/collection_cards.dart';
-import '../../widgets/screen_header.dart';
+import '../../widgets/mountain_atmosphere_hero.dart';
 import '../../widgets/state_placeholders.dart';
+import '../../widgets/swiss_artwork.dart';
 import '../../widgets/track_list_tile.dart';
 import '../../widgets/track_options_sheet.dart';
 
@@ -48,65 +49,11 @@ class _HomeView extends StatelessWidget {
         final loading =
             state.status == HomeStatus.loading && !state.feed.hasData;
 
-        return Column(
-          children: [
-            ScreenHeader(
-              tab: AppTab.home,
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TactileIconKeycap(
-                    icon: SwissTokens.of(context).isDark
-                        ? Icons.light_mode_outlined
-                        : Icons.dark_mode_outlined,
-                    size: 36,
-                    iconSize: 18,
-                    ghost: true,
-                    tooltip: SwissTokens.of(context).isDark
-                        ? 'Switch to Light Theme'
-                        : 'Switch to Dark Theme',
-                    onPressed: () {
-                      final isDark = SwissTokens.of(context).isDark;
-                      context.read<SettingsCubit>().setTheme(
-                            isDark
-                                ? ChassisTheme.alabaster
-                                : ChassisTheme.carbon,
-                          );
-                    },
-                  ),
-                  const SizedBox(width: 4),
-                  TactileIconKeycap(
-                    icon: Icons.tune,
-                    size: 36,
-                    iconSize: 18,
-                    ghost: true,
-                    tooltip: 'Settings & Equalizer',
-                    onPressed: () =>
-                        context.read<NavigationCubit>().select(AppTab.settings),
-                  ),
-                  const SizedBox(width: 4),
-                  TactileIconKeycap(
-                    icon: Icons.sync,
-                    size: 36,
-                    iconSize: 18,
-                    ghost: true,
-                    tooltip: 'Reload the feed',
-                    onPressed: state.refreshing
-                        ? null
-                        : () => context.read<HomeCubit>().refresh(),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: RefreshIndicator(
-                color: SwissTokens.of(context).accent,
-                backgroundColor: SwissTokens.of(context).surface,
-                onRefresh: () => context.read<HomeCubit>().refresh(),
-                child: _Body(state: state, loading: loading),
-              ),
-            ),
-          ],
+        return RefreshIndicator(
+          color: SwissTokens.of(context).accent,
+          backgroundColor: SwissTokens.of(context).surface,
+          onRefresh: () => context.read<HomeCubit>().refresh(),
+          child: _Body(state: state, loading: loading),
         );
       },
     );
@@ -126,6 +73,12 @@ class _Body extends StatelessWidget {
     return CustomScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       slivers: [
+        SliverToBoxAdapter(
+          child: MountainAtmosphereHero(
+            refreshing: state.refreshing,
+            onRefresh: state.refreshing ? null : cubit.refresh,
+          ),
+        ),
         if (state.status == HomeStatus.offline)
           SliverToBoxAdapter(
             child: OfflineStrip(
@@ -148,9 +101,9 @@ class _Body extends StatelessWidget {
           ),
         if (loading) ...[
           const SliverToBoxAdapter(
-              child: RailSkeleton(count: 3, index: '01', title: 'LOADING')),
+              child: RailSkeleton(count: 3, index: '', title: 'LOADING')),
           const SliverToBoxAdapter(
-              child: RailSkeleton(count: 3, index: '02', title: 'LOADING')),
+              child: RailSkeleton(count: 3, index: '', title: 'LOADING')),
         ],
         if (!loading) ...[
           if (state.filter == HomeFilter.all ||
@@ -185,14 +138,12 @@ class _Body extends StatelessWidget {
 
   /// `ALL` — the complete feed, at home in a stream.
   List<Widget> _allSections(BuildContext context, HomeState state) {
-    final player = context.read<PlayerCubit>();
+    final artists = _extractArtists(state);
 
     return [
       if (state.mixes.isNotEmpty)
         _rail(
-          '02',
           'MADE FOR YOU',
-          'DAILY MIXES BUILT FROM YOUR HISTORY',
           [
             for (final mix in state.mixes)
               CollectionRailCard(
@@ -201,24 +152,9 @@ class _Body extends StatelessWidget {
               ),
           ],
         ),
-      ..._catalogueSections(context, state, first: state.mixes.isEmpty ? '02' : '03'),
-      if (state.cachedTracks.isNotEmpty)
-        _rail(
-          '08',
-          'RECENTLY CACHED',
-          'THE ROLLING 500 MB STREAM CACHE',
-          [
-            for (final track in state.cachedTracks.take(12))
-              TrackCard(
-                track: track,
-                caption: 'CACHED',
-                onTap: () => player.playTrack(track,
-                    context: state.cachedTracks, source: 'STREAM CACHE'),
-                onOptions: () =>
-                    showTrackOptions(context, track, source: 'STREAM CACHE'),
-              ),
-          ],
-        ),
+      if (artists.isNotEmpty)
+        _artistRail(context, artists),
+      ..._catalogueSections(context, state),
     ];
   }
 
@@ -238,7 +174,7 @@ class _Body extends StatelessWidget {
       return [
         SliverToBoxAdapter(
           child: MusifyStatePanel(
-            index: '00 // NO CATALOGUE',
+            index: '',
             title: 'The catalogue is out of reach',
             message: 'Musify could not load any songs. Reconnect and pull to '
                 'refresh — everything you downloaded stays playable under '
@@ -253,9 +189,7 @@ class _Body extends StatelessWidget {
 
     return [
       _rail(
-        '01',
         'ALL MUSIC',
-        '${songs.length} TRACKS READY TO PLAY',
         [
           for (final track in songs.take(20))
             TrackCard(
@@ -267,7 +201,7 @@ class _Body extends StatelessWidget {
             ),
         ],
       ),
-      ..._catalogueSections(context, state, first: '05'),
+      ..._catalogueSections(context, state),
     ];
   }
 
@@ -288,11 +222,7 @@ class _Body extends StatelessWidget {
 
     return [
       _rail(
-        '01',
         '8D SPATIAL PICKS',
-        picks.isEmpty
-            ? 'SCANNING THE CATALOGUE…'
-            : '${picks.length} PICKS // TAP A SONG, THEN THE 8D KEYCAP',
         [
           for (final track in picks.take(20))
             TrackCard(
@@ -309,19 +239,15 @@ class _Body extends StatelessWidget {
       const SliverToBoxAdapter(child: SizedBox(height: SwissGrid.md)),
       SliverToBoxAdapter(
         child: sectionHeader(
-          '02',
+          '',
           'WHAT IS 8D?',
-          querying
-              ? 'EVERY TRACK CAN BE RENDERED LIVE'
-              : 'THE ORBIT, EXPLAINED',
+          null,
         ),
       ),
       const SliverToBoxAdapter(child: _SpatialBlurb()),
       if (picks.isNotEmpty && !querying)
         _rail(
-          '03',
           'MORE TO ORBIT',
-          'THE REST OF THE CATALOGUE',
           [
             for (final item in state.trending.take(12))
               RailItemCard(
@@ -335,19 +261,16 @@ class _Body extends StatelessWidget {
     ];
   }
 
-  /// `OFFLINE READY` — everything playable with the radio off: downloads first,
-  /// then the rolling cache. With nothing saved yet it explains how to get
-  /// there instead of showing two empty rails.
+  /// `OFFLINE READY` — everything playable with the radio off: downloads first.
   List<Widget> _offlineSections(BuildContext context, HomeState state) {
     final player = context.read<PlayerCubit>();
     final downloads = state.downloads;
-    final cached = state.cachedTracks;
 
-    if (downloads.isEmpty && cached.isEmpty) {
+    if (downloads.isEmpty) {
       return [
         SliverToBoxAdapter(
           child: MusifyStatePanel(
-            index: '00 // OFFLINE READY',
+            index: '',
             title: 'Nothing saved offline yet',
             message: 'Tap DOWNLOAD on any track — or DOWNLOAD EVERY TRACK on a '
                 'playlist — and it plays here with the network switched off.',
@@ -360,57 +283,31 @@ class _Body extends StatelessWidget {
     }
 
     return [
-      if (downloads.isNotEmpty)
-        _rail(
-          '01',
-          'OFFLINE VAULT',
-          '${downloads.length} TRACKS // 100% ON DEVICE',
-          [
-            for (final track in downloads.take(16))
-              TrackCard(
-                track: track,
-                onTap: () => player.playTrack(track,
-                    context: downloads, source: 'OFFLINE VAULT'),
-                onOptions: () =>
-                    showTrackOptions(context, track, source: 'OFFLINE VAULT'),
-              ),
-          ],
-        ),
-      if (cached.isNotEmpty)
-        _rail(
-          '02',
-          'RECENTLY CACHED',
-          '${cached.length} TRACKS THAT PLAY WITHOUT A NETWORK',
-          [
-            for (final track in cached.take(16))
-              TrackCard(
-                track: track,
-                onTap: () => player.playTrack(track,
-                    context: cached, source: 'STREAM CACHE'),
-                onOptions: () =>
-                    showTrackOptions(context, track, source: 'STREAM CACHE'),
-              ),
-          ],
-        ),
+      _rail(
+        'OFFLINE VAULT',
+        [
+          for (final track in downloads.take(16))
+            TrackCard(
+              track: track,
+              onTap: () => player.playTrack(track,
+                  context: downloads, source: 'OFFLINE VAULT'),
+              onOptions: () =>
+                  showTrackOptions(context, track, source: 'OFFLINE VAULT'),
+            ),
+        ],
+      ),
     ];
   }
 
   /// Trending / Charts / New Releases / Genres / Mood Playlists — shared by the
-  /// `ALL` and `MUSIC` filters. [first] is the ordinal the caller has reached,
-  /// so the numbering never repeats across views.
+  /// `ALL` and `MUSIC` filters.
   List<Widget> _catalogueSections(
     BuildContext context,
-    HomeState state, {
-    required String first,
-  }) {
-    final start = int.tryParse(first) ?? 5;
-    String ord(int offset) => (start + offset).toString().padLeft(2, '0');
-
+    HomeState state,
+  ) {
     return [
       _rail(
-        ord(0),
         'TRENDING NOW',
-        'WHAT INDIA IS PLAYING TODAY',
         [
           for (final item in state.trending)
             RailItemCard(
@@ -422,9 +319,7 @@ class _Body extends StatelessWidget {
         ],
       ),
       _rail(
-        ord(1),
         'TOP CHARTS',
-        'THE WEEKLY LADDER',
         [
           for (final item in state.charts)
             RailItemCard(
@@ -436,9 +331,7 @@ class _Body extends StatelessWidget {
         ],
       ),
       _rail(
-        ord(2),
         'NEW RELEASES',
-        'FRESH ALBUMS AND SINGLES',
         [
           for (final item in state.albums)
             RailItemCard(
@@ -450,9 +343,7 @@ class _Body extends StatelessWidget {
         ],
       ),
       _rail(
-        ord(3),
         'MOOD PLAYLISTS',
-        'CURATED BY THE CATALOGUE',
         [
           for (final item in state.playlists)
             RailItemCard(
@@ -467,18 +358,101 @@ class _Body extends StatelessWidget {
     ];
   }
 
+  Widget _artistRail(BuildContext context, List<_ArtistItem> artists) {
+    return SliverRail(
+      index: '',
+      title: 'FAVORITE ARTISTS',
+      subtitle: null,
+      height: 228,
+      children: [
+        for (final artist in artists)
+          _ArtistCircleCard(
+            key: ValueKey(artist.name),
+            name: artist.name,
+            artistId: artist.artistId,
+            initialImageUrl: artist.imageUrl,
+            onTap: (resolvedPhoto) => openArtist(
+              context,
+              name: artist.name,
+              id: artist.artistId,
+              imageUrl: resolvedPhoto,
+            ),
+          ),
+      ],
+    );
+  }
+
+  List<_ArtistItem> _extractArtists(HomeState state) {
+    final artists = <_ArtistItem>[];
+    final seen = <String>{};
+
+    void add(String? name, String? artistId, {String? artistImageUrl}) {
+      if (name == null) return;
+      final clean = name.trim();
+      if (clean.isEmpty || clean.toLowerCase() == 'unknown') return;
+      final primary = clean.split(',').first.split('&').first.trim();
+      if (primary.isEmpty) return;
+      final key = primary.toLowerCase();
+      if (seen.add(key)) {
+        artists.add(_ArtistItem(
+          name: primary,
+          artistId: artistId,
+          imageUrl: artistImageUrl ?? '',
+        ));
+      }
+    }
+
+    // 1. Prioritize collections that are already artist profiles
+    for (final item in state.trending) {
+      if (item.collection != null &&
+          item.collection!.kind == CollectionKind.artist) {
+        add(item.collection!.title,
+            item.collection!.artistId ?? item.collection!.id,
+            artistImageUrl: item.collection!.imageUrl);
+      }
+    }
+    // 2. User listening history (continueListening)
+    for (final t in state.continueListening) {
+      add(t.artist, t.artistId);
+    }
+    // 3. User liked songs
+    for (final t in state.liked) {
+      add(t.artist, t.artistId);
+    }
+    // 4. Downloads
+    for (final t in state.downloads) {
+      add(t.artist, t.artistId);
+    }
+    // 5. Featured hits
+    for (final t in state.featuredHits) {
+      add(t.artist, t.artistId);
+    }
+    // 6. Trending tracks
+    for (final item in state.trending) {
+      if (item.isTrack && item.track != null) {
+        add(item.track!.artist, item.track!.artistId);
+      }
+    }
+    // 7. Top searches
+    for (final t in state.topSearches) {
+      add(t.artist, t.artistId);
+    }
+
+    return artists.take(15).toList();
+  }
+
   static Widget _rail(
-    String index,
     String title,
-    String? subtitle,
     List<Widget> children, {
     Widget? trailing,
+    double? height,
   }) =>
       SliverRail(
-        index: index,
+        index: '',
         title: title,
-        subtitle: subtitle,
+        subtitle: null,
         trailing: trailing,
+        height: height ?? 252,
         children: children,
       );
 
@@ -490,6 +464,141 @@ class _Body extends StatelessWidget {
 
   static Widget sectionHeader(String index, String title, String? subtitle) =>
       SectionHeader(index: index, title: title, subtitle: subtitle);
+}
+
+class _ArtistItem {
+  final String name;
+  final String? artistId;
+  final String imageUrl;
+
+  const _ArtistItem({
+    required this.name,
+    this.artistId,
+    required this.imageUrl,
+  });
+}
+
+class _ArtistCircleCard extends StatefulWidget {
+  const _ArtistCircleCard({
+    required this.name,
+    this.artistId,
+    this.initialImageUrl = '',
+    required this.onTap,
+    super.key,
+  });
+
+  final String name;
+  final String? artistId;
+  final String initialImageUrl;
+  final ValueChanged<String?> onTap;
+
+  @override
+  State<_ArtistCircleCard> createState() => _ArtistCircleCardState();
+}
+
+class _ArtistCircleCardState extends State<_ArtistCircleCard> {
+  static final Map<String, String> _artistPhotoCache = {};
+  String _resolvedUrl = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _resolvePhoto();
+  }
+
+  @override
+  void didUpdateWidget(_ArtistCircleCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.name != widget.name) {
+      _resolvePhoto();
+    }
+  }
+
+  void _resolvePhoto() {
+    final key = widget.name.toLowerCase().trim();
+    if (_artistPhotoCache.containsKey(key)) {
+      _resolvedUrl = _artistPhotoCache[key]!;
+      return;
+    }
+
+    if (widget.initialImageUrl.isNotEmpty) {
+      _resolvedUrl = widget.initialImageUrl;
+      _artistPhotoCache[key] = widget.initialImageUrl;
+      return;
+    }
+
+    _resolvedUrl = '';
+
+    Future.microtask(() async {
+      try {
+        final music = locator<MusicRepository>();
+        final portrait = await music.enhancedArtistImage(widget.name);
+        if (portrait != null && portrait.isNotEmpty) {
+          _artistPhotoCache[key] = portrait;
+          if (mounted) setState(() => _resolvedUrl = portrait);
+          return;
+        }
+
+        final saavn = locator<JioSaavnClient>();
+        final results = await saavn.searchArtists(widget.name, limit: 1);
+        if (results.isNotEmpty && results.first.imageUrl.isNotEmpty) {
+          _artistPhotoCache[key] = results.first.imageUrl;
+          if (mounted) setState(() => _resolvedUrl = results.first.imageUrl);
+        }
+      } catch (_) {}
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = SwissTokens.of(context);
+    return SizedBox(
+      width: 184,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          Haptics.tap();
+          widget.onTap(_resolvedUrl.isNotEmpty ? _resolvedUrl : null);
+        },
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 176,
+              height: 176,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: t.hairline,
+                  width: 1.5,
+                ),
+              ),
+              child: ClipOval(
+                child: SwissArtwork(
+                  imageUrl: _resolvedUrl,
+                  circular: true,
+                  size: 176,
+                  placeholderIcon: Icons.person_outline,
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              widget.name,
+              textAlign: TextAlign.center,
+              style: SwissType.bodySm.copyWith(
+                color: t.ink,
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 /// `8D ON / ENABLE 8D` — arms the spatial engine from the rail itself, so the
