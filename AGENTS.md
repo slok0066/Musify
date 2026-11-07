@@ -44,4 +44,8 @@ Never cut: validation at trust boundaries, error handling that prevents data los
    - Never clutter the interface: avoid redundant buttons, cramped rows, fake telemetry badges, decorative noise, glowing bloom/shadows, and gradient buttons.
    - Maintain flat surfaces, crisp 1px/0.5px hairline borders, and generous breathing room.
 
+4. **Only Generate ARM64-v8a APK (Never Other ABIs)**:
+   - When building an APK (upon explicit confirmation), ALWAYS and ONLY generate the `arm64-v8a` target (`flutter build apk --target-platform android-arm64`).
+   - Do NOT generate armeabi-v7a, x86_64, or fat universal APKs. Only produce `app-arm64-v8a-release.apk`.
+
 (Yes, this file also applies to agents working on the ponytail repo itself. Especially to them.)
