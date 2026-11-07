@@ -83,6 +83,7 @@ class MusifySettings {
     this.prefetchNext = true,
     this.instantStart = true,
     this.hasSeenCredits = false,
+    this.hasEnteredName = false,
     this.userName = 'Shlok',
   });
 
@@ -124,6 +125,9 @@ class MusifySettings {
   /// True once the one-time first launch credits page has been dismissed.
   final bool hasSeenCredits;
 
+  /// True once the user has completed or dismissed the name onboarding screen.
+  final bool hasEnteredName;
+
   /// User display name shown in home greeting.
   final String userName;
 
@@ -152,6 +156,7 @@ class MusifySettings {
     bool? prefetchNext,
     bool? instantStart,
     bool? hasSeenCredits,
+    bool? hasEnteredName,
     String? userName,
   }) {
     return MusifySettings(
@@ -174,6 +179,7 @@ class MusifySettings {
       prefetchNext: prefetchNext ?? this.prefetchNext,
       instantStart: instantStart ?? this.instantStart,
       hasSeenCredits: hasSeenCredits ?? this.hasSeenCredits,
+      hasEnteredName: hasEnteredName ?? this.hasEnteredName,
       userName: userName ?? this.userName,
     );
   }
@@ -198,6 +204,7 @@ class MusifySettings {
     'prefetchNext': prefetchNext,
     'instantStart': instantStart,
     'hasSeenCredits': hasSeenCredits,
+    'hasEnteredName': hasEnteredName,
     'userName': userName,
   };
 
@@ -257,6 +264,7 @@ class MusifySettings {
       prefetchNext: boolAt('prefetchNext', true),
       instantStart: boolAt('instantStart', true),
       hasSeenCredits: boolAt('hasSeenCredits', false),
+      hasEnteredName: boolAt('hasEnteredName', false),
       userName: map['userName']?.toString() ?? 'Shlok',
     );
   }

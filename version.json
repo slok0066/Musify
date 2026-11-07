@@ -1,8 +1,8 @@
 {
-  "version": "1.0.21",
-  "build": 22,
+  "version": "1.0.22",
+  "build": 23,
   "release_notes": "• Mountain atmosphere header with dynamic time transitions\n• Personalized greeting with animated mascot onboarding\n• Favorite artists enlarged circular portraits\n• Minimal UI polish and cleaner layout",
-  "download_url": "https://github.com/slok0066/Musify/releases/download/v1.0.21/app-arm64-v8a-release.apk",
-  "apk_url": "https://github.com/slok0066/Musify/releases/download/v1.0.21/app-arm64-v8a-release.apk",
+  "download_url": "https://github.com/slok0066/Musify/releases/download/v1.0.22/app-arm64-v8a-release.apk",
+  "apk_url": "https://github.com/slok0066/Musify/releases/download/v1.0.22/app-arm64-v8a-release.apk",
   "mandatory": false
 }

@@ -208,6 +208,9 @@ class SettingsCubit extends Cubit<SettingsState> {
   void setHasSeenCredits(bool value) =>
       _update(_settings.value.copyWith(hasSeenCredits: value));
 
+  void setHasEnteredName(bool value) =>
+      _update(_settings.value.copyWith(hasEnteredName: value));
+
   void setUserName(String name) {
     final clean = name.trim();
     _update(_settings.value.copyWith(userName: clean.isEmpty ? 'Shlok' : clean));

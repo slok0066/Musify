@@ -26,20 +26,22 @@ class MainShellScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final gate = context.select<SettingsCubit, ({bool loaded, bool seen})>(
+    final gate = context.select<
+        SettingsCubit,
+        ({bool loaded, bool seenCredits, bool enteredName})>(
       (c) => (
         loaded: c.state.loaded,
-        seen: c.state.settings.hasSeenCredits,
+        seenCredits: c.state.settings.hasSeenCredits,
+        enteredName: c.state.settings.hasEnteredName,
       ),
     );
 
-    // The welcome page is only ever shown once the settings store has been
-    // read and still says this is a first install. A slow or failed load used
-    // to look exactly like a first install — defaults report
-    // `hasSeenCredits == false` — which is how the page could appear on every
-    // launch. Now an unread store shows the app instead, never the page.
-    if (gate.loaded && !gate.seen) {
-      return const _FirstLaunchFlow();
+    // If the user hasn't seen credits (new install) or hasn't entered their name yet
+    // (existing user upgrading from a previous version), launch the onboarding flow.
+    if (gate.loaded && (!gate.seenCredits || !gate.enteredName)) {
+      return _FirstLaunchFlow(
+        initialStep: gate.seenCredits ? 1 : 0,
+      );
     }
 
     return BlocListener<LibraryCubit, LibraryState>(
@@ -320,14 +322,22 @@ class _NavItem extends StatelessWidget {
 }
 
 class _FirstLaunchFlow extends StatefulWidget {
-  const _FirstLaunchFlow();
+  const _FirstLaunchFlow({this.initialStep = 0});
+
+  final int initialStep;
 
   @override
   State<_FirstLaunchFlow> createState() => _FirstLaunchFlowState();
 }
 
 class _FirstLaunchFlowState extends State<_FirstLaunchFlow> {
-  int _step = 0; // 0: Credits page, 1: Name entry page
+  late int _step;
+
+  @override
+  void initState() {
+    super.initState();
+    _step = widget.initialStep;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -342,8 +352,10 @@ class _FirstLaunchFlowState extends State<_FirstLaunchFlow> {
               key: const ValueKey('name_step'),
               initialName: context.read<SettingsCubit>().state.settings.userName,
               onComplete: (name) {
-                context.read<SettingsCubit>().setUserName(name);
-                context.read<SettingsCubit>().setHasSeenCredits(true);
+                final settings = context.read<SettingsCubit>();
+                settings.setUserName(name);
+                settings.setHasEnteredName(true);
+                settings.setHasSeenCredits(true);
               },
             ),
     );
