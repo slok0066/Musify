@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../core/theme/swiss_tokens.dart';
 import '../../services/service_locator.dart';
+import '../../services/settings_service.dart';
 import '../../services/update_service.dart';
 import '../cubits/library_cubit.dart';
 import '../cubits/navigation_cubit.dart';
@@ -26,22 +27,18 @@ class MainShellScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final gate = context.select<
-        SettingsCubit,
-        ({bool loaded, bool seenCredits, bool enteredName})>(
+    final gate = context.select<SettingsCubit, ({bool loaded, bool seen})>(
       (c) => (
         loaded: c.state.loaded,
-        seenCredits: c.state.settings.hasSeenCredits,
-        enteredName: c.state.settings.hasEnteredName,
+        seen: c.state.settings.hasSeenCredits,
       ),
     );
 
-    // If the user hasn't seen credits (new install) or hasn't entered their name yet
-    // (existing user upgrading from a previous version), launch the onboarding flow.
-    if (gate.loaded && (!gate.seenCredits || !gate.enteredName)) {
-      return _FirstLaunchFlow(
-        initialStep: gate.seenCredits ? 1 : 0,
-      );
+    // The welcome flow is only ever shown once the settings store has been
+    // read and confirms this is a first install. An existing or read store shows
+    // the app immediately, never the onboarding flow.
+    if (gate.loaded && !gate.seen) {
+      return const _FirstLaunchFlow();
     }
 
     return BlocListener<LibraryCubit, LibraryState>(
@@ -322,22 +319,14 @@ class _NavItem extends StatelessWidget {
 }
 
 class _FirstLaunchFlow extends StatefulWidget {
-  const _FirstLaunchFlow({this.initialStep = 0});
-
-  final int initialStep;
+  const _FirstLaunchFlow();
 
   @override
   State<_FirstLaunchFlow> createState() => _FirstLaunchFlowState();
 }
 
 class _FirstLaunchFlowState extends State<_FirstLaunchFlow> {
-  late int _step;
-
-  @override
-  void initState() {
-    super.initState();
-    _step = widget.initialStep;
-  }
+  int _step = 0; // 0: Credits page, 1: Name entry page
 
   @override
   Widget build(BuildContext context) {
@@ -354,8 +343,8 @@ class _FirstLaunchFlowState extends State<_FirstLaunchFlow> {
               onComplete: (name) {
                 final settings = context.read<SettingsCubit>();
                 settings.setUserName(name);
-                settings.setHasEnteredName(true);
                 settings.setHasSeenCredits(true);
+                SettingsService.markCreditsSeenNow();
               },
             ),
     );

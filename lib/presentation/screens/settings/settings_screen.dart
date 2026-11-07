@@ -300,6 +300,40 @@ class _SettingsView extends StatelessWidget {
                           value: settings.hapticsEnabled,
                           onChanged: cubit.setHaptics,
                         ),
+                        const SizedBox(height: SwissGrid.sm),
+                        SwissPanel(
+                          raised: true,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: SwissGrid.md,
+                            vertical: SwissGrid.sm + 2,
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('DISPLAY NAME',
+                                        style: SwissType.label
+                                            .copyWith(color: t.ink)),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'GREETING IN MOUNTAIN ATMOSPHERE',
+                                      style: SwissType.micro
+                                          .copyWith(color: t.inkMuted),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              TactileKeycap(
+                                height: 34,
+                                onPressed: () => _editUserName(
+                                    context, cubit, settings.userName),
+                                child: Text(settings.userName.toUpperCase()),
+                              ),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -672,6 +706,63 @@ class _SettingsView extends StatelessWidget {
     controller.dispose();
     if (result == null || result.trim().isEmpty) return;
     await cubit.importBackup(result);
+  }
+
+  void _editUserName(
+    BuildContext context,
+    SettingsCubit cubit,
+    String currentName,
+  ) {
+    final controller = TextEditingController(text: currentName);
+    final t = SwissTokens.of(context);
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: t.surfaceRaised,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: t.hairline, width: 1),
+        ),
+        title: Text(
+          'Display Name',
+          style: SwissType.displaySm.copyWith(color: t.ink, fontSize: 18),
+        ),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          textCapitalization: TextCapitalization.words,
+          style: TextStyle(color: t.ink, fontWeight: FontWeight.w600),
+          decoration: InputDecoration(
+            hintText: 'Enter your name',
+            hintStyle: TextStyle(color: t.inkFaint),
+            enabledBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: t.hairline),
+            ),
+            focusedBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: t.accent),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text('CANCEL', style: TextStyle(color: t.inkMuted)),
+          ),
+          TextButton(
+            onPressed: () {
+              final name = controller.text.trim();
+              if (name.isNotEmpty) {
+                cubit.setUserName(name);
+              }
+              Navigator.of(ctx).pop();
+            },
+            child: Text('SAVE',
+                style: TextStyle(
+                    color: t.accent, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 }
 
