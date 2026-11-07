@@ -84,7 +84,7 @@ class MusifySettings {
     this.instantStart = true,
     this.hasSeenCredits = false,
     this.hasEnteredName = false,
-    this.userName = 'Shlok',
+    this.userName = '',
   });
 
   static const List<double> flatGains = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
@@ -265,7 +265,7 @@ class MusifySettings {
       instantStart: boolAt('instantStart', true),
       hasSeenCredits: boolAt('hasSeenCredits', false),
       hasEnteredName: boolAt('hasEnteredName', false),
-      userName: map['userName']?.toString() ?? 'Shlok',
+      userName: map['userName']?.toString() ?? '',
     );
   }
 
@@ -291,6 +291,7 @@ class SettingsService extends ValueNotifier<MusifySettings> {
   static const String _key = 'musify.settings.v1';
 
   static const String seenCreditsKey = 'musify_has_seen_credits_installed';
+  static const String userNameKey = 'musify_user_name';
 
   SharedPreferences? _prefs;
 
@@ -309,8 +310,30 @@ class SettingsService extends ValueNotifier<MusifySettings> {
   /// *synchronously* on the first launch, before that launch's page can even
   /// appear, so the race cannot be lost.
   static const String _launchMarker = 'musify.launched';
+  static const String _userNameMarker = 'musify.user_name';
 
   static Directory? _markerDir;
+
+  static String _readUserNameSync() {
+    try {
+      final dir = _markerDir;
+      if (dir != null) {
+        final file = File('${dir.path}${Platform.pathSeparator}$_userNameMarker');
+        if (file.existsSync()) return file.readAsStringSync().trim();
+      }
+    } catch (_) {}
+    return '';
+  }
+
+  static void _writeUserNameSync(String name) {
+    try {
+      final dir = _markerDir;
+      if (dir != null && name.trim().isNotEmpty) {
+        final file = File('${dir.path}${Platform.pathSeparator}$_userNameMarker');
+        file.writeAsStringSync(name.trim(), flush: true);
+      }
+    } catch (_) {}
+  }
 
   /// Hydrates from disk. Guarded by the caller's startup timeout, so a missing
   /// or corrupt store simply yields defaults.
@@ -327,16 +350,25 @@ class SettingsService extends ValueNotifier<MusifySettings> {
       final seen =
           seenFlag || loaded.hasSeenCredits || firstLaunch == false;
 
+      final prefName = _prefs?.getString(userNameKey)?.trim() ?? '';
+      final fileFlag = _readUserNameSync();
+      final resolvedName = loaded.userName.trim().isNotEmpty
+          ? loaded.userName.trim()
+          : (prefName.isNotEmpty ? prefName : fileFlag);
+
       _loaded = true;
-      value = loaded.copyWith(hasSeenCredits: seen);
+      value = loaded.copyWith(hasSeenCredits: seen, userName: resolvedName);
       // The gate must hear "the store was read" even when the value happens to
       // equal the defaults, which the notifier alone would swallow.
       notifyListeners();
     } catch (e) {
       debugPrint('SettingsService.load failed, using defaults: $e');
       _loaded = true;
-      value = const MusifySettings()
-          .copyWith(hasSeenCredits: firstLaunch == false);
+      final fileFlag = _readUserNameSync();
+      value = const MusifySettings().copyWith(
+        hasSeenCredits: firstLaunch == false,
+        userName: fileFlag,
+      );
       notifyListeners();
     }
   }
@@ -393,9 +425,25 @@ class SettingsService extends ValueNotifier<MusifySettings> {
       if (value.hasSeenCredits) {
         await _prefs?.setBool(seenCreditsKey, true);
       }
+      if (value.userName.trim().isNotEmpty) {
+        await _prefs?.setString(userNameKey, value.userName.trim());
+        _writeUserNameSync(value.userName.trim());
+      }
     } catch (e) {
       debugPrint('SettingsService persist failed: $e');
     }
+  }
+
+  /// Synchronously stamps user name to disk and SharedPreferences immediately.
+  static void markUserNameNow(String name) {
+    final clean = name.trim();
+    if (clean.isEmpty) return;
+    unawaited(
+      SharedPreferences.getInstance()
+          .then((prefs) => prefs.setString(userNameKey, clean))
+          .catchError((Object _) => false),
+    );
+    _writeUserNameSync(clean);
   }
 
   /// Restores settings from a backup payload.

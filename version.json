@@ -1,8 +1,8 @@
 {
-  "version": "1.0.23",
-  "build": 24,
-  "release_notes": "• Fix onboarding re-trigger issue\n• Added Display Name editor in Settings\n• Mountain atmosphere and favorite artists polish",
-  "download_url": "https://github.com/slok0066/Musify/releases/download/v1.0.23/app-arm64-v8a-release.apk",
-  "apk_url": "https://github.com/slok0066/Musify/releases/download/v1.0.23/app-arm64-v8a-release.apk",
+  "version": "1.0.24",
+  "build": 25,
+  "release_notes": "• Personalized greeting: set your name to customize your morning mountain atmosphere\n• Name onboarding persists directly until given\n• Added Display Name editor in Settings ▸ Interface\n• Favorite artists enlarged circular portraits",
+  "download_url": "https://github.com/slok0066/Musify/releases/download/v1.0.24/app-arm64-v8a-release.apk",
+  "apk_url": "https://github.com/slok0066/Musify/releases/download/v1.0.24/app-arm64-v8a-release.apk",
   "mandatory": false
 }

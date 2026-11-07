@@ -12,7 +12,7 @@ import '../../../core/theme/tactile_decorations.dart';
 class NameOnboardingScreen extends StatefulWidget {
   const NameOnboardingScreen({
     required this.onComplete,
-    this.initialName = 'Shlok',
+    this.initialName = '',
     super.key,
   });
 
@@ -46,9 +46,13 @@ class _NameOnboardingScreenState extends State<NameOnboardingScreen> {
   }
 
   void _submit() {
-    Haptics.commit();
     final name = _controller.text.trim();
-    widget.onComplete(name.isEmpty ? 'Shlok' : name);
+    if (name.isEmpty) {
+      Haptics.tap();
+      return;
+    }
+    Haptics.commit();
+    widget.onComplete(name);
   }
 
   Widget _buildMascot(BuildContext context) {
@@ -251,25 +255,6 @@ class _NameOnboardingScreenState extends State<NameOnboardingScreen> {
                             color: t.accentInk,
                           ),
                         ],
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  // Skip option
-                  TextButton(
-                    onPressed: () {
-                      Haptics.tap();
-                      widget.onComplete('Shlok');
-                    },
-                    child: Text(
-                      'SKIP FOR NOW',
-                      style: SwissType.label.copyWith(
-                        color: t.inkMuted,
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.8,
                       ),
                     ),
                   ),

@@ -213,7 +213,11 @@ class SettingsCubit extends Cubit<SettingsState> {
 
   void setUserName(String name) {
     final clean = name.trim();
-    _update(_settings.value.copyWith(userName: clean.isEmpty ? 'Shlok' : clean));
+    SettingsService.markUserNameNow(clean);
+    _update(_settings.value.copyWith(
+      userName: clean,
+      hasEnteredName: clean.isNotEmpty,
+    ));
   }
 
   // ----------------------------------------------------------------- storage

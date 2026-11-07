@@ -329,7 +329,9 @@ class _SettingsView extends StatelessWidget {
                                 height: 34,
                                 onPressed: () => _editUserName(
                                     context, cubit, settings.userName),
-                                child: Text(settings.userName.toUpperCase()),
+                                child: Text(settings.userName.trim().isEmpty
+                                    ? 'SET NAME'
+                                    : settings.userName.toUpperCase()),
                               ),
                             ],
                           ),

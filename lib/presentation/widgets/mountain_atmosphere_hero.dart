@@ -287,7 +287,7 @@ class _MountainAtmosphereHeroState extends State<MountainAtmosphereHero>
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          userName,
+                          userName.trim().isNotEmpty ? userName : 'Musify',
                           style: TextStyle(
                             fontFamily: 'PlusJakartaSans',
                             fontSize: 30,

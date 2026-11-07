@@ -27,18 +27,21 @@ class MainShellScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final gate = context.select<SettingsCubit, ({bool loaded, bool seen})>(
+    final gate = context.select<
+        SettingsCubit,
+        ({bool loaded, bool seenCredits, String userName})>(
       (c) => (
         loaded: c.state.loaded,
-        seen: c.state.settings.hasSeenCredits,
+        seenCredits: c.state.settings.hasSeenCredits,
+        userName: c.state.settings.userName,
       ),
     );
 
-    // The welcome flow is only ever shown once the settings store has been
-    // read and confirms this is a first install. An existing or read store shows
-    // the app immediately, never the onboarding flow.
-    if (gate.loaded && !gate.seen) {
-      return const _FirstLaunchFlow();
+    // Keep opening the name onboarding screen on launch until a name is given.
+    if (gate.loaded && gate.userName.trim().isEmpty) {
+      return _FirstLaunchFlow(
+        initialStep: gate.seenCredits ? 1 : 0,
+      );
     }
 
     return BlocListener<LibraryCubit, LibraryState>(
@@ -319,14 +322,22 @@ class _NavItem extends StatelessWidget {
 }
 
 class _FirstLaunchFlow extends StatefulWidget {
-  const _FirstLaunchFlow();
+  const _FirstLaunchFlow({this.initialStep = 0});
+
+  final int initialStep;
 
   @override
   State<_FirstLaunchFlow> createState() => _FirstLaunchFlowState();
 }
 
 class _FirstLaunchFlowState extends State<_FirstLaunchFlow> {
-  int _step = 0; // 0: Credits page, 1: Name entry page
+  late int _step;
+
+  @override
+  void initState() {
+    super.initState();
+    _step = widget.initialStep;
+  }
 
   @override
   Widget build(BuildContext context) {

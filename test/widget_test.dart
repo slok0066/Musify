@@ -317,7 +317,7 @@ void main() {
       MaterialApp(
         theme: buildMusifyTheme(SwissTokens.carbon),
         home: NameOnboardingScreen(
-          initialName: 'Shlok',
+          initialName: '',
           onComplete: (name) => submittedName = name,
         ),
       ),
