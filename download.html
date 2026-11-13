@@ -1,0 +1,1175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <title>Musify v2.0.0 — Pure Music, Zero Clutter • Official Download</title>
+  <meta name="description" content="Download Musify v2.0.0 APK for Android. Swiss-minimalist music player with real-time 8D audio and curated lossless streaming.">
+  
+  <!-- Open Graph / Social Sharing -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Musify v2.0.0 — Pure Music, Zero Clutter">
+  <meta property="og:description" content="Ad-free, open-source Android music player with real-time 8D spatial audio and Swiss minimalism.">
+  <meta property="og:image" content="assets/musify_banner.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Musify v2.0.0 — Pure Music, Zero Clutter">
+  <meta name="twitter:description" content="Ad-free, open-source Android music player with real-time 8D spatial audio.">
+  <meta name="twitter:image" content="assets/musify_banner.png">
+  <meta name="theme-color" content="#090a0d">
+
+  <link rel="icon" type="image/png" href="assets/clean_vector_emblem.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      --bg-base: #090a0d;
+      --bg-surface: #111318;
+      --bg-raised: #171922;
+      --bg-sunken: #0d0e13;
+      --hairline: rgba(255, 255, 255, 0.08);
+      --hairline-strong: rgba(255, 255, 255, 0.14);
+      --hairline-active: rgba(255, 255, 255, 0.28);
+      --ink: #ffffff;
+      --ink-muted: #94a3b8;
+      --ink-faint: #64748b;
+      --accent-pill: #ffffff;
+      --accent-pill-ink: #090a0d;
+      --status-emerald: #10b981;
+      --status-emerald-glow: rgba(16, 185, 129, 0.35);
+      --cyan-accent: #38bdf8;
+      --cyan-glow: rgba(56, 189, 248, 0.35);
+      --sky-glow: rgba(88, 112, 156, 0.2);
+      --ease-tactile: cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: var(--bg-base);
+      color: var(--ink);
+      line-height: 1.5;
+      overflow-x: hidden;
+      min-height: 100vh;
+    }
+
+    .ambient-glow {
+      position: fixed;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(100vw, 1200px);
+      height: 480px;
+      background: radial-gradient(ellipse at 50% 0%, var(--sky-glow) 0%, rgba(9, 10, 13, 0) 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .container {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 0 20px;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Navigation */
+    nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 0;
+      border-bottom: 1px solid var(--hairline);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: var(--ink);
+    }
+
+    .brand-logo {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      border: 1px solid var(--hairline-strong);
+      display: block;
+      background: #181920;
+    }
+
+    .brand-text {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .brand-name {
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      text-transform: uppercase;
+    }
+
+    .brand-tag {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--ink-faint);
+      letter-spacing: 0.08em;
+    }
+
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .nav-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 5px 12px;
+      border-radius: 999px;
+      background: var(--bg-surface);
+      border: 1px solid var(--hairline);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--ink-muted);
+    }
+
+    .pulse-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--status-emerald);
+      box-shadow: 0 0 8px var(--status-emerald-glow);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.3); opacity: 0.7; }
+    }
+
+    .nav-link {
+      text-decoration: none;
+      color: var(--ink-muted);
+      font-size: 13px;
+      font-weight: 600;
+      transition: color 0.2s ease;
+    }
+
+    .nav-link:hover {
+      color: var(--ink);
+    }
+
+    /* Hero Section */
+    .hero {
+      padding: 44px 0 28px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .hero-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 12px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--hairline-strong);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--ink-muted);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+
+    .hero-title {
+      font-size: clamp(28px, 6vw, 62px);
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      line-height: 1.1;
+      max-width: 800px;
+      margin-bottom: 14px;
+      background: linear-gradient(180deg, #FFFFFF 40%, rgba(255, 255, 255, 0.7) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero-subtitle {
+      font-size: clamp(14px, 1.8vw, 18px);
+      font-weight: 400;
+      color: var(--ink-muted);
+      max-width: 580px;
+      line-height: 1.55;
+      margin-bottom: 28px;
+    }
+
+    /* Featured Banner Showcase Box */
+    .banner-showcase-box {
+      width: 100%;
+      max-width: 1040px;
+      border-radius: 20px;
+      overflow: hidden;
+      border: 1px solid var(--hairline-strong);
+      background: var(--bg-surface);
+      box-shadow: 0 24px 70px rgba(0, 0, 0, 0.8);
+      margin-bottom: 36px;
+      position: relative;
+    }
+
+    .banner-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      background: rgba(17, 19, 24, 0.95);
+      border-bottom: 1px solid var(--hairline);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+    }
+
+    .banner-switcher {
+      display: flex;
+      gap: 6px;
+    }
+
+    .switch-btn {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--hairline);
+      color: var(--ink-muted);
+      padding: 4px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 600;
+      transition: all 0.2s ease;
+    }
+
+    .switch-btn.active {
+      background: #ffffff;
+      color: #090a0d;
+      border-color: #ffffff;
+    }
+
+    .banner-img-wrap {
+      width: 100%;
+      position: relative;
+      line-height: 0;
+      background: #090a0d;
+    }
+
+    .banner-img-wrap img {
+      width: 100%;
+      height: auto;
+      display: block;
+      transition: opacity 0.3s ease;
+    }
+
+    /* Main CTA Card */
+    .cta-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--hairline-strong);
+      border-radius: 24px;
+      padding: 26px 30px;
+      max-width: 540px;
+      width: 100%;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+      position: relative;
+      overflow: hidden;
+      margin-bottom: 28px;
+    }
+
+    .cta-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+    }
+
+    .primary-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      background: var(--accent-pill);
+      color: var(--accent-pill-ink);
+      text-decoration: none;
+      padding: 16px 28px;
+      border-radius: 999px;
+      font-size: 15.5px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      transition: all 0.2s var(--ease-tactile);
+      box-shadow: 0 6px 25px rgba(255, 255, 255, 0.12);
+      width: 100%;
+    }
+
+    .primary-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 32px rgba(255, 255, 255, 0.22);
+    }
+
+    .primary-btn:active {
+      transform: scale(0.98);
+    }
+
+    .btn-badge {
+      background: rgba(9, 10, 13, 0.12);
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .cta-secondary-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 14px;
+      flex-wrap: wrap;
+    }
+
+    .secondary-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--hairline);
+      color: var(--ink-muted);
+      font-size: 12.5px;
+      font-weight: 600;
+      text-decoration: none;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .secondary-btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--ink);
+      border-color: var(--hairline-strong);
+    }
+
+    /* Quick Specs Grid */
+    .specs-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 32px;
+      width: 100%;
+    }
+
+    .spec-item {
+      background: var(--bg-surface);
+      border: 1px solid var(--hairline);
+      border-radius: 14px;
+      padding: 14px 16px;
+      text-align: left;
+    }
+
+    .spec-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--ink-faint);
+      letter-spacing: 0.06em;
+      margin-bottom: 3px;
+      text-transform: uppercase;
+    }
+
+    .spec-val {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: var(--ink);
+    }
+
+    /* 8D Binaural Soundstage Interactive Visualizer */
+    .spatial-section {
+      padding: 44px 0;
+      border-top: 1px solid var(--hairline);
+      border-bottom: 1px solid var(--hairline);
+      margin: 28px 0;
+    }
+
+    .section-eyebrow {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--cyan-accent);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    .section-title {
+      font-size: clamp(24px, 4vw, 36px);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+
+    .section-desc {
+      font-size: 14.5px;
+      color: var(--ink-muted);
+      max-width: 520px;
+      margin: 6px auto 0;
+      line-height: 1.5;
+    }
+
+    .spatial-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--hairline-strong);
+      border-radius: 24px;
+      padding: 32px;
+      max-width: 880px;
+      margin: 28px auto 0;
+      box-shadow: 0 16px 45px rgba(0, 0, 0, 0.5);
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 32px;
+      align-items: center;
+    }
+
+    .spatial-visual-wrap {
+      position: relative;
+      width: 100%;
+      max-width: 280px;
+      aspect-ratio: 1;
+      height: auto;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      touch-action: none;
+    }
+
+    .radar-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+    }
+
+    .center-listener {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: #ffffff;
+      color: #090a0d;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      z-index: 10;
+      box-shadow: 0 0 25px rgba(255, 255, 255, 0.35);
+      user-select: none;
+      pointer-events: none;
+    }
+
+    .spatial-controls-box {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .eq-bar-wrap {
+      display: flex;
+      align-items: flex-end;
+      gap: 3px;
+      height: 44px;
+      padding: 6px 10px;
+      background: var(--bg-sunken);
+      border: 1px solid var(--hairline);
+      border-radius: 10px;
+    }
+
+    .eq-bar {
+      flex: 1;
+      background: var(--cyan-accent);
+      border-radius: 2px;
+      transition: height 0.08s ease;
+      min-height: 4px;
+      opacity: 0.85;
+    }
+
+    .orbit-speed-pills {
+      display: flex;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    .speed-btn {
+      flex: 1;
+      padding: 6px 8px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--hairline);
+      color: var(--ink-muted);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .speed-btn.active {
+      background: var(--cyan-accent);
+      color: #090a0d;
+      font-weight: 700;
+      border-color: var(--cyan-accent);
+    }
+
+    /* REAL FULL SCREEN APP UI SHOWCASE */
+    .ui-showcase-section {
+      padding: 44px 0 64px;
+    }
+
+    .screens-showcase-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      margin-top: 28px;
+    }
+
+    .screen-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--hairline-strong);
+      border-radius: 22px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.3s var(--ease-tactile), border-color 0.3s ease;
+      box-shadow: 0 12px 35px rgba(0, 0, 0, 0.5);
+    }
+
+    .screen-card:hover {
+      transform: translateY(-4px);
+      border-color: var(--hairline-active);
+    }
+
+    .screen-card-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--hairline);
+      background: rgba(17, 19, 24, 0.95);
+    }
+
+    .screen-tag {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--cyan-accent);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 2px;
+    }
+
+    .screen-title {
+      font-size: 17px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+
+    .screen-device-viewport {
+      padding: 24px 16px;
+      background: radial-gradient(circle at 50% 20%, #151720 0%, #08090c 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    .device-mockup-img {
+      max-width: 280px;
+      width: 100%;
+      height: auto;
+      display: block;
+      border-radius: 32px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 1px rgba(255, 255, 255, 0.15);
+      transition: transform 0.3s var(--ease-tactile);
+    }
+
+    .screen-card:hover .device-mockup-img {
+      transform: scale(1.02);
+    }
+
+    .mobile-swipe-hint {
+      display: none;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--ink-faint);
+      margin-top: 12px;
+      text-align: center;
+      letter-spacing: 0.05em;
+    }
+
+    /* QR Modal */
+    .qr-modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(16px);
+      z-index: 999;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .qr-modal.open {
+      display: flex;
+    }
+
+    .qr-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--hairline-strong);
+      border-radius: 24px;
+      padding: 32px;
+      max-width: 380px;
+      width: 100%;
+      text-align: center;
+      position: relative;
+      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.9);
+    }
+
+    .qr-close {
+      position: absolute;
+      top: 18px;
+      right: 18px;
+      background: none;
+      border: none;
+      color: var(--ink-muted);
+      font-size: 22px;
+      cursor: pointer;
+      padding: 4px;
+      line-height: 1;
+    }
+
+    .qr-image-wrap {
+      background: #ffffff;
+      padding: 14px;
+      border-radius: 14px;
+      display: inline-block;
+      margin: 18px 0;
+    }
+
+    .qr-image-wrap img {
+      display: block;
+      width: 180px;
+      height: 180px;
+    }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--hairline);
+      padding: 36px 0;
+      text-align: center;
+      color: var(--ink-faint);
+      font-size: 13px;
+      margin-top: 24px;
+    }
+
+    footer a {
+      color: var(--ink-muted);
+      text-decoration: none;
+      transition: color 0.2s ease;
+    }
+
+    footer a:hover {
+      color: var(--ink);
+    }
+
+    /* Tablet & Medium Screens */
+    @media (max-width: 900px) {
+      .spatial-card {
+        grid-template-columns: 1fr;
+        padding: 24px 20px;
+        max-width: 520px;
+      }
+      .specs-grid {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+
+    /* Mobile Screens */
+    @media (max-width: 768px) {
+      .container {
+        padding: 0 16px;
+      }
+      .hero {
+        padding: 32px 0 20px;
+      }
+      .banner-showcase-box {
+        border-radius: 16px;
+        margin-bottom: 24px;
+      }
+      .banner-toolbar {
+        padding: 8px 12px;
+      }
+      .cta-card {
+        padding: 20px 16px;
+        border-radius: 20px;
+      }
+      .desktop-only-qr {
+        display: none !important;
+      }
+      .secondary-btn {
+        width: 100%;
+        justify-content: center;
+      }
+      .screens-showcase-grid {
+        display: flex;
+        overflow-x: auto;
+        scroll-snap-type: x mandatory;
+        -webkit-overflow-scrolling: touch;
+        gap: 16px;
+        padding: 4px 4px 16px;
+        margin-top: 18px;
+        scrollbar-width: none;
+      }
+      .screens-showcase-grid::-webkit-scrollbar {
+        display: none;
+      }
+      .screen-card {
+        min-width: 80vw;
+        max-width: 320px;
+        scroll-snap-align: center;
+        flex-shrink: 0;
+      }
+      .mobile-swipe-hint {
+        display: block;
+      }
+      .nav-link {
+        display: none;
+      }
+    }
+
+    /* Small Phones (iPhone SE, Galaxy A series, <= 480px) */
+    @media (max-width: 480px) {
+      .hero-title {
+        font-size: 29px;
+      }
+      .hero-subtitle {
+        font-size: 14px;
+      }
+      .specs-grid {
+        gap: 6px;
+      }
+      .spec-item {
+        padding: 10px 8px;
+        border-radius: 10px;
+      }
+      .spec-label {
+        font-size: 9px;
+      }
+      .spec-val {
+        font-size: 12px;
+      }
+      .spatial-card {
+        padding: 20px 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="ambient-glow" id="ambientGlow"></div>
+
+  <!-- QR Scan Modal for Desktop Users -->
+  <div class="qr-modal" id="qrModal" onclick="closeQrModal(event)">
+    <div class="qr-card" onclick="event.stopPropagation()">
+      <button class="qr-close" onclick="closeQrModal()">&times;</button>
+      <h3 style="font-size: 18px; font-weight: 700; margin-bottom: 4px;">Scan to Download APK</h3>
+      <p style="font-size: 13px; color: var(--ink-muted);">Point your Android camera to download directly to your device.</p>
+      <div class="qr-image-wrap">
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=https://github.com/slok0066/Musify/releases/download/v2.0.0/app-arm64-v8a-release.apk" alt="Download QR Code">
+      </div>
+      <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink-faint);">
+        v2.0.0 • 31.8 MB • Android 8.0+
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- Navbar -->
+    <nav>
+      <a href="#" class="brand">
+        <img class="brand-logo" src="assets/clean_vector_emblem.png" alt="Musify Logo">
+        <div class="brand-text">
+          <span class="brand-name">Musify</span>
+          <span class="brand-tag">v2.0.0</span>
+        </div>
+      </a>
+      <div class="nav-actions">
+        <div class="nav-badge">
+          <span class="pulse-dot"></span>
+          <span>STABLE</span>
+        </div>
+        <a href="https://github.com/slok0066/Musify" target="_blank" class="nav-link">GitHub</a>
+      </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+      <div class="hero-eyebrow">
+        <span>Android Release • v2.0.0</span>
+      </div>
+      <h1 class="hero-title">Pure Music, Zero Clutter.</h1>
+      <p class="hero-subtitle">
+        Ad-free, open-source streaming music player crafted with Swiss minimalism and real-time 8D spatial audio.
+      </p>
+
+      <!-- Featured Banner Showcase -->
+      <div class="banner-showcase-box">
+        <div class="banner-toolbar">
+          <span style="color: var(--ink-faint);">OFFICIAL PROMO BANNER</span>
+          <div class="banner-switcher">
+            <button class="switch-btn active" onclick="switchBanner('obsidian')">Obsidian Swiss</button>
+            <button class="switch-btn" onclick="switchBanner('vibrant')">Electric Rose</button>
+          </div>
+        </div>
+        <div class="banner-img-wrap">
+          <img id="bannerImg" src="assets/musify_banner.png" alt="Musify v2.0.0 Official Banner">
+        </div>
+      </div>
+
+      <!-- Main Action Card -->
+      <div class="cta-card">
+        <a href="https://github.com/slok0066/Musify/releases/download/v2.0.0/app-arm64-v8a-release.apk" class="primary-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          <span>Download Musify APK</span>
+          <span class="btn-badge">v2.0.0</span>
+        </a>
+
+        <div class="cta-secondary-row">
+          <button class="secondary-btn desktop-only-qr" onclick="openQrModal()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="7"></rect>
+              <rect x="14" y="3" width="7" height="7"></rect>
+              <rect x="14" y="14" width="7" height="7"></rect>
+              <rect x="3" y="14" width="7" height="7"></rect>
+            </svg>
+            <span>Scan QR</span>
+          </button>
+          <a href="https://github.com/slok0066/Musify/releases/tag/v2.0.0" target="_blank" class="secondary-btn">
+            <span>View Release on GitHub ↗</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Quick Specs -->
+      <div class="specs-grid">
+        <div class="spec-item">
+          <div class="spec-label">VERSION</div>
+          <div class="spec-val">v2.0.0 (45)</div>
+        </div>
+        <div class="spec-item">
+          <div class="spec-label">PACKAGE SIZE</div>
+          <div class="spec-val">31.8 MB</div>
+        </div>
+        <div class="spec-item">
+          <div class="spec-label">PLATFORM</div>
+          <div class="spec-val">Android 8.0+</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- REAL-TIME 8D BINAURAL SOUNDSTAGE ANIMATION -->
+    <section class="spatial-section">
+      <div style="text-align: center;">
+        <div class="section-eyebrow">SPATIAL SOUNDSTAGE</div>
+        <h2 class="section-title">Interactive 8D Audio</h2>
+        <p class="section-desc">
+          Dynamic soundstage orbital rotation around your ears. Touch or drag the node to adjust panning.
+        </p>
+      </div>
+
+      <div class="spatial-card">
+        <div class="spatial-visual-wrap" id="radarWrap">
+          <canvas class="radar-canvas" id="radarCanvas" width="280" height="280"></canvas>
+          <div class="center-listener">🎧</div>
+        </div>
+
+        <div class="spatial-controls-box">
+          <div style="display: flex; justify-content: space-between; align-items: baseline;">
+            <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; color: var(--ink-faint); letter-spacing: 0.08em;">
+              ORBITAL ANGLE
+            </div>
+            <div style="font-family: 'JetBrains Mono', monospace; font-size: 18px; font-weight: 800; color: var(--cyan-accent);" id="azimuthNumber">
+              142°
+            </div>
+          </div>
+
+          <!-- Dynamic Live Audio Bars -->
+          <div class="eq-bar-wrap" id="eqBarWrap"></div>
+
+          <div style="display: flex; justify-content: space-between; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink-faint);">
+            <span>PAN: <strong id="panReadout" style="color: var(--ink);">L +38% // R -38%</strong></span>
+            <span>DISTANCE: <strong style="color: var(--ink);">1.4m</strong></span>
+          </div>
+
+          <div style="border-top: 1px solid var(--hairline); padding-top: 14px;">
+            <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; color: var(--ink-faint); margin-bottom: 8px;">
+              ORBIT SPEED
+            </div>
+            <div class="orbit-speed-pills">
+              <button class="speed-btn" onclick="setOrbitSpeed(0.5, this)">0.5x Slow</button>
+              <button class="speed-btn active" onclick="setOrbitSpeed(1.0, this)">1.0x Normal</button>
+              <button class="speed-btn" onclick="setOrbitSpeed(2.0, this)">2.0x Fast</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- REAL APP UI & SCREENS SHOWCASE -->
+    <section class="ui-showcase-section">
+      <div style="text-align: center;">
+        <div class="section-eyebrow">GENUINE ANDROID APP</div>
+        <h2 class="section-title">Clean & Minimal Interface</h2>
+        <p class="section-desc">
+          Real screenshots captured directly from Musify running on Android.
+        </p>
+      </div>
+
+      <div class="screens-showcase-grid">
+        <!-- 01: Home Screen -->
+        <div class="screen-card">
+          <div class="screen-card-header">
+            <div class="screen-tag">01 // HOME</div>
+            <div class="screen-title">Mountain Horizon</div>
+          </div>
+          <div class="screen-device-viewport">
+            <img src="assets/ui/screen_home.png" alt="Musify Home Screen" class="device-mockup-img" loading="lazy">
+          </div>
+        </div>
+
+        <!-- 02: Now Playing Player Screen -->
+        <div class="screen-card">
+          <div class="screen-card-header">
+            <div class="screen-tag">02 // NOW PLAYING</div>
+            <div class="screen-title">Spatial 8D Player</div>
+          </div>
+          <div class="screen-device-viewport">
+            <img src="assets/ui/screen_player.png" alt="Musify Player Screen" class="device-mockup-img" loading="lazy">
+          </div>
+        </div>
+
+        <!-- 03: Search & Library Screen -->
+        <div class="screen-card">
+          <div class="screen-card-header">
+            <div class="screen-tag">03 // SEARCH</div>
+            <div class="screen-title">Discovery & Library</div>
+          </div>
+          <div class="screen-device-viewport">
+            <img src="assets/ui/screen_search.png" alt="Musify Search Screen" class="device-mockup-img" loading="lazy">
+          </div>
+        </div>
+      </div>
+      <div class="mobile-swipe-hint">← Swipe to explore screens →</div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+      <p style="margin-bottom: 8px;">
+        <strong>Musify</strong> • Open Source Android Music Player • GPL-3.0
+      </p>
+      <p>
+        <a href="https://github.com/slok0066/Musify" target="_blank">GitHub Repository</a> • 
+        <a href="https://github.com/slok0066/Musify/releases/tag/v2.0.0" target="_blank">v2.0.0 Release Notes</a>
+      </p>
+    </footer>
+  </div>
+
+  <script>
+    function switchBanner(style) {
+      const img = document.getElementById('bannerImg');
+      document.querySelectorAll('.switch-btn').forEach(btn => btn.classList.remove('active'));
+      event.currentTarget.classList.add('active');
+
+      if (style === 'obsidian') {
+        img.src = 'assets/musify_banner.png';
+      } else {
+        img.src = 'assets/musify_banner_vibrant.png';
+      }
+    }
+
+    function openQrModal() {
+      document.getElementById('qrModal').classList.add('open');
+    }
+
+    function closeQrModal(e) {
+      document.getElementById('qrModal').classList.remove('open');
+    }
+
+    // --- 8D SPATIAL CANVAS ANIMATION ---
+    const canvas = document.getElementById('radarCanvas');
+    const ctx = canvas.getContext('2d');
+    const azimuthNumber = document.getElementById('azimuthNumber');
+    const panReadout = document.getElementById('panReadout');
+
+    let currentAngle = 142;
+    let orbitSpeed = 1.0;
+    let isDragging = false;
+    const centerX = 140;
+    const centerY = 140;
+    const orbitRadius = 96;
+
+    const eqWrap = document.getElementById('eqBarWrap');
+    const eqBarCount = 20;
+    for (let i = 0; i < eqBarCount; i++) {
+      const bar = document.createElement('div');
+      bar.className = 'eq-bar';
+      eqWrap.appendChild(bar);
+    }
+    const eqBars = document.querySelectorAll('.eq-bar');
+
+    function setOrbitSpeed(speed, btn) {
+      orbitSpeed = speed;
+      document.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    }
+
+    function handlePointer(e) {
+      const rect = canvas.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const x = (clientX - rect.left) * scaleX - centerX;
+      const y = (clientY - rect.top) * scaleY - centerY;
+      let rad = Math.atan2(y, x);
+      let deg = Math.round((rad * 180 / Math.PI) + 90);
+      if (deg < 0) deg += 360;
+      currentAngle = deg;
+    }
+
+    canvas.addEventListener('mousedown', (e) => { isDragging = true; handlePointer(e); });
+    window.addEventListener('mouseup', () => isDragging = false);
+    canvas.addEventListener('mousemove', (e) => { if (isDragging) handlePointer(e); });
+
+    canvas.addEventListener('touchstart', (e) => { isDragging = true; handlePointer(e); }, { passive: true });
+    window.addEventListener('touchend', () => isDragging = false);
+    canvas.addEventListener('touchmove', (e) => { 
+      if (isDragging) {
+        if (e.cancelable) e.preventDefault();
+        handlePointer(e);
+      }
+    }, { passive: false });
+
+    let pulseRadius = 0;
+
+    function renderRadar() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      if (!isDragging) {
+        currentAngle = (currentAngle + (0.75 * orbitSpeed)) % 360;
+      }
+
+      // Radiating Sound Pulse
+      pulseRadius = (pulseRadius + 1.0) % orbitRadius;
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, pulseRadius, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(56, 189, 248, ${0.45 * (1 - pulseRadius / orbitRadius)})`;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Dashed orbit circle
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, orbitRadius, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Secondary range rings
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, orbitRadius * 0.65, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
+      ctx.stroke();
+
+      // Convert Angle to Cartesian Coordinates
+      const rad = ((currentAngle - 90) * Math.PI) / 180;
+      const speakerX = centerX + Math.cos(rad) * orbitRadius;
+      const speakerY = centerY + Math.sin(rad) * orbitRadius;
+
+      // Glow behind speaker
+      const grad = ctx.createRadialGradient(speakerX, speakerY, 2, speakerX, speakerY, 20);
+      grad.addColorStop(0, 'rgba(56, 189, 248, 0.85)');
+      grad.addColorStop(1, 'rgba(56, 189, 248, 0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(speakerX, speakerY, 20, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Speaker Node Dot
+      ctx.beginPath();
+      ctx.arc(speakerX, speakerY, 8, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = '#38bdf8';
+      ctx.stroke();
+
+      // Vector ray connecting listener to speaker
+      ctx.beginPath();
+      ctx.moveTo(centerX, centerY);
+      ctx.lineTo(speakerX, speakerY);
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.2)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // Angle and pan updates
+      const roundedAngle = Math.round(currentAngle);
+      azimuthNumber.innerText = `${roundedAngle}°`;
+
+      const pan = Math.round(Math.sin((roundedAngle * Math.PI) / 180) * 100);
+      if (pan > 0) {
+        panReadout.innerText = `R +${pan}% // L -${pan}%`;
+      } else {
+        panReadout.innerText = `L +${Math.abs(pan)}% // R -${Math.abs(pan)}%`;
+      }
+
+      const time = Date.now() * 0.005;
+      eqBars.forEach((bar, i) => {
+        const h = Math.abs(Math.sin(time + i * 0.4) * 32) + 4;
+        bar.style.height = `${h}px`;
+      });
+
+      requestAnimationFrame(renderRadar);
+    }
+
+    renderRadar();
+  </script>
+</body>
+</html>
