@@ -242,6 +242,7 @@ class TrackCard extends StatelessWidget {
     this.width = 176,
     this.isCurrent = false,
     this.caption,
+    this.frameless = false,
     super.key,
   });
 
@@ -251,6 +252,7 @@ class TrackCard extends StatelessWidget {
   final double width;
   final bool isCurrent;
   final String? caption;
+  final bool frameless;
 
   @override
   Widget build(BuildContext context) {
@@ -267,15 +269,17 @@ class TrackCard extends StatelessWidget {
         },
         onLongPress: onOptions,
         child: Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: t.surfaceRaised,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isCurrent ? t.accent.withValues(alpha: 0.45) : t.hairline,
-              width: 1,
-            ),
-          ),
+          padding: frameless ? EdgeInsets.zero : const EdgeInsets.all(10),
+          decoration: frameless
+              ? null
+              : BoxDecoration(
+                  color: t.surfaceRaised,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: isCurrent ? t.accent.withValues(alpha: 0.45) : t.hairline,
+                    width: 1,
+                  ),
+                ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
@@ -284,7 +288,7 @@ class TrackCard extends StatelessWidget {
                 children: [
                   SwissArtwork(
                     imageUrl: track.imageUrl,
-                    radius: 14,
+                    radius: frameless ? 16 : 14,
                     showBorder: false,
                     placeholderIcon: Icons.music_note,
                   ),
@@ -293,7 +297,7 @@ class TrackCard extends StatelessWidget {
                       child: DecoratedBox(
                         decoration: BoxDecoration(
                           color: t.bg.withValues(alpha: 0.62),
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(frameless ? 16 : 14),
                         ),
                       ),
                     ),

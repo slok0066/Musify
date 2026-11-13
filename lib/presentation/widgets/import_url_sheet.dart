@@ -109,7 +109,6 @@ class _ImportUrlSheetState extends State<_ImportUrlSheet> {
   }
 }
 
-// ---------------------------------------------------------------- phase 1 & 2
 
 class _UrlForm extends StatelessWidget {
   const _UrlForm({
@@ -200,7 +199,6 @@ class _UrlForm extends StatelessWidget {
   }
 }
 
-// -------------------------------------------------------------------- phase 3
 
 /// The scan result, parked until the user says where it goes.
 class _Destination extends StatelessWidget {

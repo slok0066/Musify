@@ -1,6 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:masko_player/masko_player.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../../../core/theme/swiss_tokens.dart';
 import '../../../core/theme/tactile_decorations.dart';
@@ -24,6 +28,35 @@ class NameOnboardingScreen extends StatefulWidget {
   static const String mascotStacked =
       'https://assets.masko.ai/fc3fdf/mascot-20b3/waves-hello-4813c530.mp4';
 
+  static String? _cachedLocalMascotUri;
+
+  /// Returns the local file URI for the mascot video, extracting it from
+  /// bundled assets into the app cache directory if not already extracted.
+  /// This eliminates the 3MB remote network download, allowing the mascot
+  /// to load immediately.
+  static Future<String> getLocalMascotUri() async {
+    if (_cachedLocalMascotUri != null) return _cachedLocalMascotUri!;
+
+    try {
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/musify_mascot_waves.mp4');
+      if (await file.exists() && await file.length() > 0) {
+        _cachedLocalMascotUri = file.uri.toString();
+        return _cachedLocalMascotUri!;
+      }
+
+      final data = await rootBundle.load('assets/mascot/waves-hello.mp4');
+      await file.writeAsBytes(
+        data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
+        flush: true,
+      );
+      _cachedLocalMascotUri = file.uri.toString();
+      return _cachedLocalMascotUri!;
+    } catch (_) {
+      return mascotStacked;
+    }
+  }
+
   @override
   State<NameOnboardingScreen> createState() => _NameOnboardingScreenState();
 }
@@ -31,11 +64,21 @@ class NameOnboardingScreen extends StatefulWidget {
 class _NameOnboardingScreenState extends State<NameOnboardingScreen> {
   late final TextEditingController _controller;
   final FocusNode _focusNode = FocusNode();
+  String _stackedMascot = NameOnboardingScreen._cachedLocalMascotUri ?? NameOnboardingScreen.mascotStacked;
 
   @override
   void initState() {
     super.initState();
     _controller = TextEditingController(text: widget.initialName);
+    _loadMascot();
+  }
+
+  Future<void> _loadMascot() async {
+    if (NameOnboardingScreen._cachedLocalMascotUri != null) return;
+    final uri = await NameOnboardingScreen.getLocalMascotUri();
+    if (mounted && uri != _stackedMascot) {
+      setState(() => _stackedMascot = uri);
+    }
   }
 
   @override
@@ -56,40 +99,28 @@ class _NameOnboardingScreenState extends State<NameOnboardingScreen> {
   }
 
   Widget _buildMascot(BuildContext context) {
-    final t = SwissTokens.of(context);
     final isMobile = defaultTargetPlatform == TargetPlatform.android ||
         defaultTargetPlatform == TargetPlatform.iOS;
 
     return SizedBox(
       width: 190,
       height: 190,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          if (isMobile)
-            const MaskoView(
+      child: isMobile
+          ? MaskoView(
               clip: MaskoClipFiles(
                 hevc: NameOnboardingScreen.mascotHevc,
-                stacked: NameOnboardingScreen.mascotStacked,
+                stacked: _stackedMascot,
               ),
               sound: false,
               autoPlay: true,
             )
-          else
-            Container(
-              width: 130,
-              height: 130,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: t.surfaceRaised,
-                border: Border.all(color: t.hairline, width: 1),
-              ),
-              child: const Center(
-                child: Text('👋', style: TextStyle(fontSize: 56)),
-              ),
+          : Image.asset(
+              'assets/mascot/waves-hello-poster.webp',
+              width: 190,
+              height: 190,
+              fit: BoxFit.contain,
+              filterQuality: FilterQuality.medium,
             ),
-        ],
-      ),
     );
   }
 

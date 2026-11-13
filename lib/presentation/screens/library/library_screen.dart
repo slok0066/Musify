@@ -548,59 +548,7 @@ Future<void> _playlistOptions(
   );
 }
 
-class _SheetRow extends StatelessWidget {
-  const _SheetRow({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.accent,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  final Color? accent;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = SwissTokens.of(context);
-    final color = accent ?? t.ink;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () {
-          Haptics.tap();
-          onTap();
-        },
-        highlightColor: Colors.transparent,
-        splashColor: Colors.transparent,
-        child: Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: SwissGrid.lg,
-            vertical: SwissGrid.md + 2,
-          ),
-          decoration: BoxDecoration(
-            border: Border(bottom: BorderSide(color: t.hairline, width: 1)),
-          ),
-          child: Row(
-            children: [
-              Icon(icon, size: 17, color: color),
-              const SizedBox(width: SwissGrid.md),
-              Expanded(
-                child: Text(
-                  label,
-                  style: SwissType.label.copyWith(color: color),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
+typedef _SheetRow = SwissSheetActionTile;
 
 /// Live progress for the URL importer, shown where the playlist will land.
 class _ImportProgressPanel extends StatelessWidget {

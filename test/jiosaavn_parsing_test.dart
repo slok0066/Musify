@@ -404,15 +404,6 @@ void main() {
         reason: 'no rendition marker: assumed to be the master, left alone',
       );
     });
-
-    test('artwork is upscaled to 500x500 for every extension', () {
-      expect(JioSaavnClient.hires('https://c/x-150x150.jpg'),
-          'https://c/x-500x500.jpg');
-      expect(JioSaavnClient.hires('https://c/x-50x50.webp'),
-          'https://c/x-500x500.webp');
-      expect(JioSaavnClient.hires('https://c/x.jpg'), 'https://c/x.jpg');
-      expect(JioSaavnClient.hires(''), '');
-    });
   });
 
   group('Track.fromMap survives hostile persisted maps (Law 8)', () {

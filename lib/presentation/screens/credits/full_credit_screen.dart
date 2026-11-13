@@ -20,7 +20,7 @@ class FullCreditScreen extends StatefulWidget {
 }
 
 class _FullCreditScreenState extends State<FullCreditScreen> {
-  static const String _instaHandle = 'king_togetherness';
+  static const String _instaHandle = 'shlok._.exe_';
 
   @override
   void initState() {

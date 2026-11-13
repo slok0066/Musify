@@ -5,7 +5,6 @@ import '../../../core/theme/swiss_tokens.dart';
 import '../../../core/theme/tactile_decorations.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../data/models/track.dart';
-import '../../../services/settings_service.dart';
 import '../../cubits/player_cubit.dart';
 import '../../widgets/swiss_artwork.dart';
 import '../../widgets/track_options_sheet.dart';

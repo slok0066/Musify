@@ -15,7 +15,7 @@ enum SearchFacet { all, songs, artists, albums, playlists }
 extension SearchFacetLabel on SearchFacet {
   String get label => switch (this) {
     SearchFacet.all => 'ALL',
-    SearchFacet.songs => 'SONGS (320K)',
+    SearchFacet.songs => 'SONGS',
     SearchFacet.artists => 'ARTISTS',
     SearchFacet.albums => 'ALBUMS',
     SearchFacet.playlists => 'PLAYLISTS',
@@ -49,14 +49,8 @@ class SearchState extends Equatable {
   final bool canLoadMore;
   final String? errorText;
 
-  bool get isSearching => status == SearchStatus.loading;
-
-  bool get hasResults => !results.isEmpty;
-
   /// The default genre grid shows when nothing has been typed.
   bool get showBrowser => query.trim().isEmpty;
-
-  int get songCount => results.songs.length;
 
   SearchState copyWith({
     String? query,
@@ -120,7 +114,6 @@ class SearchCubit extends Cubit<SearchState> {
   int _page = 1;
   int _requestToken = 0;
 
-  // --------------------------------------------------------------- input
 
   void onQueryChanged(String value) {
     emit(state.copyWith(query: value, clearError: true));
@@ -168,7 +161,6 @@ class SearchCubit extends Cubit<SearchState> {
     emit(state.copyWith(facet: facet));
   }
 
-  // ------------------------------------------------------------- execution
 
   Future<void> _run(String query) async {
     final token = ++_requestToken;
@@ -188,7 +180,7 @@ class SearchCubit extends Cubit<SearchState> {
           results: results,
           recents: _library.recentSearches(),
           suggestions: _suggestionsFor(results, query),
-          canLoadMore: results.songs.length >= 25,
+          canLoadMore: results.songs.length >= 6,
         ),
       );
     } catch (e) {
@@ -217,13 +209,15 @@ class SearchCubit extends Cubit<SearchState> {
         return;
       }
       _page++;
+      final combined = Track.dedupe([...state.results.songs, ...more]);
+      final addedAny = combined.length > state.results.songs.length;
       emit(
         state.copyWith(
           loadingMore: false,
-          canLoadMore: more.length >= 25,
+          canLoadMore: addedAny && more.length >= 4,
           results: SearchResults(
             query: query,
-            songs: Track.dedupe([...state.results.songs, ...more]),
+            songs: combined,
             albums: state.results.albums,
             artists: state.results.artists,
             playlists: state.results.playlists,
@@ -252,7 +246,6 @@ class SearchCubit extends Cubit<SearchState> {
     return out;
   }
 
-  // -------------------------------------------------------------- recents
 
   Future<void> removeRecent(String query) async {
     await _library.removeSearch(query);

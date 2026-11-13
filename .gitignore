@@ -64,3 +64,10 @@ app.*.map.json
 
 # Widget Preview
 .widget_preview/
+
+# Release keystore (never commit)
+android/app/musify-release.jks
+
+# Temporary HTML previews
+home_preview.html
+

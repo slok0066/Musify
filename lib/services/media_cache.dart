@@ -6,24 +6,6 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
-/// Where a cached file came from.
-enum CacheEntryKind { stream, download }
-
-/// A staged file plus its metadata.
-class CacheEntry {
-  const CacheEntry({
-    required this.path,
-    required this.bytes,
-    required this.kind,
-    required this.accessedAt,
-  });
-
-  final String path;
-  final int bytes;
-  final CacheEntryKind kind;
-  final DateTime accessedAt;
-}
-
 /// Progress of an in-flight transfer.
 class TransferProgress {
   const TransferProgress({
@@ -42,8 +24,6 @@ class TransferProgress {
 
   /// `null` when the server does not send `Content-Length`.
   final double? fraction;
-
-  bool get isDeterminate => fraction != null;
 }
 
 /// What a one-byte range probe learned about a media URL.
@@ -57,6 +37,9 @@ class _Probe {
   /// The URL answered with an error page instead of media.
   final bool dead;
 }
+
+/// Whether a cached file belongs to the playback cache or permanent downloads.
+enum CacheEntryKind { stream, download }
 
 /// The single owner of every audio byte Musify writes to disk.
 ///
@@ -308,7 +291,6 @@ class MediaCache {
     }
   }
 
-  // ---------------------------------------------------------------- streaming
 
   /// Opens a **read-while-writing** transfer for [url].
   ///
@@ -328,6 +310,7 @@ class MediaCache {
   Future<StreamSession?> openStream({
     required String url,
     required String fileName,
+    Map<String, String>? headers,
     ValueChanged<TransferProgress>? onProgress,
   }) async {
     if (url.isEmpty || fileName.isEmpty) return null;
@@ -363,46 +346,29 @@ class MediaCache {
       await existing.abandon();
     }
 
-    // 3. One probe buys the length (so the engine can be told the exact size)
-    //    and rejects a delisted rendition before a byte of an error page lands.
-    final probe = await _probe(url, null);
-    final total = probe?.total;
-    if (probe == null || probe.dead || total == null || total < _minStreamBytes) {
-      if (probe != null && !probe.dead && total == null) {
-        debugPrint('MediaCache: $url does not report a length, cannot stream');
-      }
-      return null;
-    }
-
     final partial = File('${target.path}.part');
-
-    // A second caller (a prefetch racing a tap) may have finished probing while
-    // this one did. Attach to its transfer rather than opening a second
-    // connection to the same file.
-    final raced = _live[url];
-    if (raced != null) {
-      if (!raced.failed &&
-          !raced.stopped &&
-          raced.target.path == target.path) {
-        raced.attach();
-        return StreamSession._live(raced);
-      }
-      await raced.abandon();
-    }
-
     await _safeDelete(partial);
 
+    // 3. Start the live transfer directly with a single connection.
+    // Streaming chunks are buffered immediately as the headers arrive.
     final transfer = _LiveTransfer(
       cache: this,
       url: url,
       target: target,
       partial: partial,
-      total: total,
+      headers: headers,
       onProgress: onProgress,
     );
     _live[url] = transfer;
     transfer.attach();
     unawaited(transfer.run());
+
+    final total = await transfer.awaitConnected();
+    if (total == null || total < _minStreamBytes) {
+      await transfer.abandon();
+      return null;
+    }
+
     onProgress?.call(const TransferProgress.indeterminate());
     return StreamSession._live(transfer);
   }
@@ -433,7 +399,11 @@ class MediaCache {
   /// A one-byte range request: the cheapest way to learn a file's real length,
   /// whether the server honours `Range`, and whether the URL still resolves to
   /// audio at all.
-  Future<_Probe?> _probe(String url, CancelToken? cancelToken) async {
+  Future<_Probe?> _probe(
+    String url,
+    CancelToken? cancelToken, {
+    Map<String, String>? headers,
+  }) async {
     ResponseBody? body;
     try {
       final response = await _dio.get<ResponseBody>(
@@ -442,7 +412,11 @@ class MediaCache {
         options: Options(
           responseType: ResponseType.stream,
           followRedirects: true,
-          headers: const {'Accept': '*/*', 'Range': 'bytes=0-0'},
+          headers: {
+            'Accept': '*/*',
+            if (headers != null) ...headers,
+            'Range': 'bytes=0-0',
+          },
         ),
       );
       body = response.data;
@@ -1192,16 +1166,29 @@ class _LiveTransfer {
     required this.url,
     required this.target,
     required this.partial,
-    required this.total,
+    int? total,
+    this.headers,
     this.onProgress,
-  });
+  })  : _total = total,
+        _currentUrl = url {
+    if (total != null && total > 0) {
+      _connectedCompleter.complete(total);
+    }
+  }
 
   final MediaCache cache;
   final String url;
+  String _currentUrl;
   final File target;
   final File partial;
-  final int total;
+  int? _total;
+  int get total => _total ?? 0;
+  final Map<String, String>? headers;
   final ValueChanged<TransferProgress>? onProgress;
+
+  final Completer<int?> _connectedCompleter = Completer<int?>();
+
+  Future<int?> awaitConnected() => _connectedCompleter.future;
 
   /// Which byte ranges are on disk. *Coverage* — not bytes received — decides
   /// whether a read can be served and when the file is whole.
@@ -1228,7 +1215,10 @@ class _LiveTransfer {
 
   /// A read more than this far ahead of the connection restarts it there:
   /// reconnecting beats waiting for sequential bytes to download.
-  static const int _jumpBytes = 64 * 1024;
+  static const int _jumpBytes = 192 * 1024;
+
+  /// Explicit user seeks jump if the target is more than 48 KB ahead.
+  static const int _minSeekJumpBytes = 48 * 1024;
 
   /// How long [readRange] waits before giving up on a range.
   static const Duration _readTimeout = Duration(seconds: 8);
@@ -1267,15 +1257,15 @@ class _LiveTransfer {
     // The pump is inside the window, or close enough behind it to reach it
     // before a reconnect would: let it finish instead of re-buying the gap.
     if (_cursor >= offset && _cursor <= to) return;
-    if (_cursor < offset && offset - _cursor <= _jumpBytes) return;
+    if (_cursor < offset && offset - _cursor <= _minSeekJumpBytes) return;
     if (_connectingFrom != null &&
         _connectingFrom! <= offset &&
-        offset <= _connectingFrom! + _jumpBytes) {
+        offset <= _connectingFrom! + _minSeekJumpBytes) {
       return;
     }
     if (_restartAt != null &&
         _restartAt! <= offset &&
-        offset <= _restartAt! + _jumpBytes) {
+        offset <= _restartAt! + _minSeekJumpBytes) {
       return;
     }
     _generation++;
@@ -1286,7 +1276,6 @@ class _LiveTransfer {
     }
   }
 
-  // ---------------------------------------------------------------- reading
 
   /// Waits for `[start, end)` to be on disk, then reads it.
   Future<Uint8List?> readRange(int start, int end) async {
@@ -1309,7 +1298,21 @@ class _LiveTransfer {
     return _readFromDisk(from, to);
   }
 
+  Future<void> _readLock = Future.value();
+
   Future<Uint8List?> _readFromDisk(int start, int end) async {
+    final prev = _readLock;
+    final completer = Completer<void>();
+    _readLock = completer.future;
+    try {
+      await prev;
+      return await _readFromDiskGuarded(start, end);
+    } finally {
+      completer.complete();
+    }
+  }
+
+  Future<Uint8List?> _readFromDiskGuarded(int start, int end) async {
     // After finalization the bytes live under `target`, but an open handle
     // keeps working across the rename, so try the live handle first.
     final candidates = <File>[partial, if (_finalized) target];
@@ -1356,18 +1359,21 @@ class _LiveTransfer {
     if (token != null && !token.isCancelled) token.cancel('reposition');
   }
 
-  // --------------------------------------------------------------- transfer
 
   Future<void> run() async {
     while (!_stopped && !complete) {
       var from = _restartAt;
       _restartAt = null;
       if (from == null) {
-        final gap = _coverage.firstGap(total);
-        if (gap == null) break;
-        from = gap;
+        if (!_connectedCompleter.isCompleted) {
+          from = 0;
+        } else {
+          final gap = _coverage.firstGap(total);
+          if (gap == null) break;
+          from = gap;
+        }
       }
-      if (from >= total) break;
+      if (_connectedCompleter.isCompleted && from >= total) break;
       if (!await _pumpFrom(from)) break;
     }
     if (complete && !_stopped) {
@@ -1385,16 +1391,44 @@ class _LiveTransfer {
     _connectingFrom = from;
     try {
       final response = await cache._dio.get<ResponseBody>(
-        url,
+        _currentUrl,
         cancelToken: token,
         options: Options(
           responseType: ResponseType.stream,
           followRedirects: true,
-          headers: {'Accept': '*/*', if (from > 0) 'Range': 'bytes=$from-'},
+          headers: {
+            'Accept': '*/*',
+            ...?headers,
+            'Range': 'bytes=$from-',
+          },
         ),
       );
+      final real = response.realUri.toString();
+      if (real.isNotEmpty && real.startsWith('http')) {
+        _currentUrl = real;
+      }
       final body = response.data;
       if (body == null) return _fail('empty response');
+
+      if (MediaCache.isErrorPage(
+          response.headers.value(Headers.contentTypeHeader))) {
+        return _fail('error page');
+      }
+
+      if (!_connectedCompleter.isCompleted) {
+        final parsedTotal = response.statusCode == 206
+            ? MediaCache._totalFromContentRange(
+                response.headers.value('content-range'),
+              )
+            : int.tryParse(
+                response.headers.value(Headers.contentLengthHeader) ?? '',
+              );
+        if (parsedTotal == null || parsedTotal < MediaCache._minStreamBytes) {
+          return _fail('no length or file too small');
+        }
+        _total = parsedTotal;
+        _connectedCompleter.complete(parsedTotal);
+      }
 
       // A server that ignores `Range` answers 200 with the whole file: write it
       // from zero rather than at the offset we asked for.
@@ -1487,6 +1521,7 @@ class _LiveTransfer {
 
   /// Stops the transfer and removes its partial file.
   Future<void> abandon() async {
+    if (!_connectedCompleter.isCompleted) _connectedCompleter.complete(null);
     _stopped = true;
     final token = _token;
     if (token != null && !token.isCancelled) token.cancel('abandoned');
@@ -1496,6 +1531,7 @@ class _LiveTransfer {
   }
 
   bool _fail(String reason) {
+    if (!_connectedCompleter.isCompleted) _connectedCompleter.complete(null);
     if (_error == null) {
       _error = reason;
       debugPrint('MediaCache stream failed for $url: $reason');

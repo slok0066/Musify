@@ -10,7 +10,10 @@ import '../cubits/library_cubit.dart';
 import '../cubits/player_cubit.dart';
 import '../navigation.dart';
 import 'add_to_playlist_sheet.dart';
+import 'sheet_components.dart';
 import 'swiss_artwork.dart';
+
+export 'sheet_components.dart' show MusifySheetShell, MusifySheetHeader, SwissSheetActionTile;
 
 /// The universal `⋮` sheet from PRD §3.3 — available on every song row, in the
 /// Now Playing header, and from the mini-player.
@@ -210,61 +213,7 @@ class _TrackOptions extends StatelessWidget {
   }
 }
 
-class _Option extends StatelessWidget {
-  const _Option({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.accent = false,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  final bool accent;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = SwissTokens.of(context);
-    final color = accent ? t.accent : t.ink;
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () {
-          Haptics.tap();
-          onTap();
-        },
-        highlightColor: Colors.transparent,
-        splashColor: Colors.transparent,
-        child: Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: SwissGrid.lg,
-            vertical: SwissGrid.md + 2,
-          ),
-          decoration: BoxDecoration(
-            border: Border(bottom: BorderSide(color: t.hairline, width: 1)),
-          ),
-          child: Row(
-            children: [
-              Icon(icon, size: 17, color: color),
-              const SizedBox(width: SwissGrid.md),
-              Expanded(
-                child: Text(
-                  label,
-                  style: SwissType.label.copyWith(
-                    color: color,
-                    letterSpacing: 1.1,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
+typedef _Option = SwissSheetActionTile;
 
 /// The header every Musify sheet opens with: artwork, ordinal tag and title.
 class _SheetHeader extends StatelessWidget {
@@ -315,87 +264,6 @@ class _SheetHeader extends StatelessWidget {
             hapticOnPress: false,
             onPressed: () => Navigator.of(context).maybePop(),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Shared chrome: Swiss panel, rounded top corners, safe-area bottom padding.
-class MusifySheetShell extends StatelessWidget {
-  const MusifySheetShell(
-      {required this.child, this.maxHeightFactor = 0.86, super.key});
-
-  final Widget child;
-  final double maxHeightFactor;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = SwissTokens.of(context);
-    final height = MediaQuery.sizeOf(context).height * maxHeightFactor;
-    return ConstrainedBox(
-      constraints: BoxConstraints(maxHeight: height, minWidth: double.infinity),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: t.surfaceRaised,
-          borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(32),
-          ),
-        ),
-        child: SafeArea(top: false, child: child),
-      ),
-    );
-  }
-}
-
-/// Reusable header for the lyrics / queue / sleep sheets.
-class MusifySheetHeader extends StatelessWidget {
-  const MusifySheetHeader({
-    required this.title,
-    this.subtitle,
-    this.trailing,
-    super.key,
-  });
-
-  final String title;
-  final String? subtitle;
-  final Widget? trailing;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = SwissTokens.of(context);
-    return Container(
-      padding: const EdgeInsets.fromLTRB(
-          SwissGrid.lg, SwissGrid.md, SwissGrid.md, SwissGrid.md),
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: t.hairline, width: 1)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 5,
-            height: 5,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: t.accent,
-            ),
-          ),
-          const SizedBox(width: SwissGrid.sm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(title, style: SwissType.label.copyWith(color: t.ink)),
-                if (subtitle != null)
-                  Text(
-                    subtitle!,
-                    style: SwissType.micro.copyWith(color: t.inkFaint),
-                  ),
-              ],
-            ),
-          ),
-          if (trailing != null) trailing!,
         ],
       ),
     );

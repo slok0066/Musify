@@ -63,7 +63,6 @@ class ArtworkClient {
     return result;
   }
 
-  // ------------------------------------------------------------------ Deezer
 
   Future<Artwork?> _deezerAlbum(String album, String artist) async {
     final data = await _deezer('search/album', {
@@ -111,7 +110,6 @@ class ArtworkClient {
     return first is Map ? first.cast<String, dynamic>() : null;
   }
 
-  // ------------------------------------------------------------------ iTunes
 
   Future<Artwork?> _itunesTrack(String term, String artist) async {
     final results = await _itunes({'term': '$term $artist', 'entity': 'song', 'limit': '1'});

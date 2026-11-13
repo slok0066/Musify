@@ -197,7 +197,6 @@ class _CollectionBody extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.only(bottom: SwissGrid.xxl),
       children: [
-        // ---------------------------------------------------------- hero plate
         Padding(
           padding: const EdgeInsets.all(SwissGrid.gutter),
           child: Row(
@@ -263,7 +262,6 @@ class _CollectionBody extends StatelessWidget {
           ),
         ),
 
-        // ------------------------------------------------------------ controls
         Padding(
           padding: const EdgeInsets.fromLTRB(
               SwissGrid.gutter, 0, SwissGrid.gutter, SwissGrid.lg),
@@ -348,7 +346,6 @@ class _CollectionBody extends StatelessWidget {
           ),
         ),
 
-        // --------------------------------------------------------- description
         if ((description ?? '').trim().isNotEmpty)
           Padding(
             padding: const EdgeInsets.fromLTRB(
@@ -371,7 +368,6 @@ class _CollectionBody extends StatelessWidget {
             ),
           ),
 
-        // ------------------------------------------------------------ tracklist
         if (errorText != null && tracks.isEmpty)
           MusifyStatePanel(
             index: 'ERR // COLLECTION',
@@ -605,53 +601,7 @@ class _CollectionBody extends StatelessWidget {
   }
 }
 
-class _SheetAction extends StatelessWidget {
-  const _SheetAction(
-      {required this.icon, required this.label, required this.onTap});
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = SwissTokens.of(context);
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () {
-          Haptics.tap();
-          onTap();
-        },
-        highlightColor: Colors.transparent,
-        splashColor: Colors.transparent,
-        child: Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: SwissGrid.lg,
-            vertical: SwissGrid.md + 2,
-          ),
-          decoration: BoxDecoration(
-            border: Border(bottom: BorderSide(color: t.hairline, width: 1)),
-          ),
-          child: Row(
-            children: [
-              Icon(icon, size: 17, color: t.ink),
-              const SizedBox(width: SwissGrid.md),
-              Expanded(
-                child: Text(
-                  label,
-                  style: SwissType.label.copyWith(color: t.ink),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
+typedef _SheetAction = SwissSheetActionTile;
 
 class _DetailSkeleton extends StatelessWidget {
   const _DetailSkeleton();

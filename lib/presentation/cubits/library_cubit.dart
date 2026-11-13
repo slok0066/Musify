@@ -87,8 +87,6 @@ class LibraryState extends Equatable {
   /// Transient one-shot message the screen shows in a snackbar.
   final String? toast;
 
-  bool get isEmpty => entries.isEmpty;
-
   bool get importing => importProgress != null &&
       importProgress!.phase != ImportPhase.done &&
       importProgress!.phase != ImportPhase.failed;
@@ -186,7 +184,6 @@ class LibraryCubit extends Cubit<LibraryState> {
   /// One storage warning per session is a diagnostic; two is nagging.
   bool _warnedAboutStorage = false;
 
-  // ------------------------------------------------------------------ reads
 
   void _reload() {
     if (isClosed) return;
@@ -233,7 +230,6 @@ class LibraryCubit extends Cubit<LibraryState> {
 
   UserPlaylist? playlistById(String id) => _library.playlistById(id);
 
-  // --------------------------------------------------------------- playlists
 
   Future<UserPlaylist?> createPlaylist({required String name, String description = ''}) async {
     if (name.trim().isEmpty) {
@@ -280,7 +276,6 @@ class LibraryCubit extends Cubit<LibraryState> {
     _reload();
   }
 
-  // -------------------------------------------------------------- liked songs
 
   /// Flips the heart and **verifies the write by reading the store back**.
   ///
@@ -335,7 +330,6 @@ class LibraryCubit extends Cubit<LibraryState> {
     _reload();
   }
 
-  // ---------------------------------------------------------------- downloads
 
   Future<bool> download(Track track) async {
     if (_inFlight.containsKey(track.id)) return false;
@@ -391,9 +385,6 @@ class LibraryCubit extends Cubit<LibraryState> {
     _toast('FREED ${_mb(freed)}');
   }
 
-  bool isDownloading(String trackId) => _inFlight.containsKey(trackId);
-
-  // ------------------------------------------------------------------ import
 
   /// Reads a public YouTube / Spotify playlist URL and matches every entry
   /// against JioSaavn, creating a local playlist out of the hits.
@@ -512,7 +503,6 @@ class LibraryCubit extends Cubit<LibraryState> {
     _toast('IMPORT DISCARDED');
   }
 
-  // ------------------------------------------------------------------ backup
 
   /// Writes a `.json` backup and returns its path, or `null` on failure.
   Future<String?> exportBackup() async {
@@ -527,7 +517,6 @@ class LibraryCubit extends Cubit<LibraryState> {
     return result;
   }
 
-  // ------------------------------------------------------------------- toast
 
   /// Public entry point so any sheet can raise the same snackbar channel.
   void showToast(String message) => _toast(message);

@@ -6,10 +6,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../data/models/track.dart';
 import '../../data/repositories/library_repository.dart';
-import '../../data/repositories/music_repository.dart';
 import '../../data/sources/local_store.dart';
 import '../../services/player/playback_service.dart';
-import '../../services/settings_service.dart';
+
+export '../../services/player/playback_service.dart' show RepeatMode;
 
 /// Everything any screen needs to know about playback, in one immutable value.
 ///
@@ -67,13 +67,6 @@ class PlayerState extends Equatable {
   bool get hasTrack => track != null;
 
   bool get canSeek => duration > Duration.zero;
-
-  /// Readout for the mini-player's progress hairline.
-  double get progress {
-    if (duration <= Duration.zero) return 0;
-    final value = position.inMilliseconds / duration.inMilliseconds;
-    return value.isFinite ? value.clamp(0.0, 1.0) : 0;
-  }
 
   double get bufferedFraction {
     if (duration <= Duration.zero) return 0;
@@ -170,11 +163,9 @@ class PlayerCubit extends Cubit<PlayerState> {
   PlayerCubit({
     required PlaybackService player,
     required LibraryRepository library,
-    required MusicRepository music,
     required LocalStore store,
   })  : _player = player,
         _library = library,
-        _music = music,
         _store = store,
         super(const PlayerState()) {
     _attach();
@@ -182,13 +173,10 @@ class PlayerCubit extends Cubit<PlayerState> {
 
   final PlaybackService _player;
   final LibraryRepository _library;
-  final MusicRepository _music;
   final LocalStore _store;
 
-  final Map<String, double?> _downloads = {};
   final List<ValueListenable<Object?>> _watched = [];
 
-  // ------------------------------------------------------------------ wiring
 
   void _attach() {
     _watch(_player.currentTrack);
@@ -236,7 +224,7 @@ class PlayerCubit extends Cubit<PlayerState> {
       queueIndex: _player.queueIndex.value,
       liked: track != null && _library.isLiked(track.id, track.dedupeKey),
       downloaded: track != null && _library.isDownloaded(track.id),
-      downloadProgress: track == null ? null : _downloads[track.id],
+      downloadProgress: null,
       headphones: _player.headphonesConnected.value,
     );
     if (next == state) return;
@@ -246,7 +234,6 @@ class PlayerCubit extends Cubit<PlayerState> {
   /// Re-syncs player state with repositories immediately.
   void sync() => _sync();
 
-  // ----------------------------------------------------------------- playback
 
   /// Starts a collection from [startIndex]. [source] is the label the Now
   /// Playing header shows, e.g. `SEARCH // 320 KBPS AAC`.
@@ -318,7 +305,6 @@ class PlayerCubit extends Cubit<PlayerState> {
     unawaited(_library.recordPlay(track));
   }
 
-  // -------------------------------------------------------------------- 8D
 
   Future<void> toggle8D() => _player.toggle8D();
 
@@ -331,7 +317,6 @@ class PlayerCubit extends Cubit<PlayerState> {
         rearLowPass: rearLowPass,
       );
 
-  // ----------------------------------------------------------------- modes
 
   void toggleShuffle() => _player.setShuffle(!_player.shuffleEnabled.value);
 
@@ -343,60 +328,12 @@ class PlayerCubit extends Cubit<PlayerState> {
 
   void cancelSleepTimer() => _player.setSleepTimer(null);
 
-  // ---------------------------------------------------------------- library
 
   Future<bool> toggleLike(Track track) async {
     final liked = await _library.toggleLike(track);
     _sync();
     return liked;
   }
-
-  Future<void> like(Track track) async {
-    await _library.like(track);
-    _sync();
-  }
-
-  Future<void> unlike(String trackId) async {
-    await _library.unlike(trackId);
-    _sync();
-  }
-
-  /// `[DOWNLOAD]` on the Now Playing dock or the options sheet.
-  Future<bool> download(Track track) async {
-    if (_downloads.containsKey(track.id)) return false;
-    _downloads[track.id] = null;
-    _sync();
-
-    try {
-      final updated = await _music.downloadTrack(
-        track,
-        onProgress: (fraction) {
-          if (isClosed) return;
-          _downloads[track.id] = fraction;
-          _sync();
-        },
-      );
-      if (updated == null) return false;
-      await _library.recordDownload(updated);
-      return true;
-    } catch (e) {
-      debugPrint('Download failed for ${track.id}: $e');
-      return false;
-    } finally {
-      _downloads.remove(track.id);
-      _sync();
-    }
-  }
-
-  Future<void> deleteDownload(Track track) async {
-    await _music.deleteDownload(track);
-    await _library.removeDownloadRecord(track.id);
-    _sync();
-  }
-
-  bool isDownloading(String trackId) => _downloads.containsKey(trackId);
-
-  double? progressFor(String trackId) => _downloads[trackId];
 
   @override
   Future<void> close() {

@@ -56,6 +56,7 @@ class HomeState extends Equatable {
     this.status = HomeStatus.loading,
     this.feed = const HomeFeed(),
     this.mixes = const [],
+    this.suggestions = const [],
     this.continueListening = const [],
     this.cachedTracks = const [],
     this.downloads = const [],
@@ -70,6 +71,7 @@ class HomeState extends Equatable {
   final HomeStatus status;
   final HomeFeed feed;
   final List<Collection> mixes;
+  final List<Track> suggestions;
   final List<Track> continueListening;
   final List<Track> cachedTracks;
   final List<Track> downloads;
@@ -81,9 +83,6 @@ class HomeState extends Equatable {
   final String? errorText;
 
   bool get isOffline => status == HomeStatus.offline;
-
-  /// Recently played rail, newest first — the engine's history already is.
-  List<Track> get continueRail => continueListening;
 
   List<RailItem> get trending => feed.trending;
 
@@ -103,6 +102,7 @@ class HomeState extends Equatable {
     HomeStatus? status,
     HomeFeed? feed,
     List<Collection>? mixes,
+    List<Track>? suggestions,
     List<Track>? continueListening,
     List<Track>? cachedTracks,
     List<Track>? downloads,
@@ -118,6 +118,7 @@ class HomeState extends Equatable {
       status: status ?? this.status,
       feed: feed ?? this.feed,
       mixes: mixes ?? this.mixes,
+      suggestions: suggestions ?? this.suggestions,
       continueListening: continueListening ?? this.continueListening,
       cachedTracks: cachedTracks ?? this.cachedTracks,
       downloads: downloads ?? this.downloads,
@@ -135,6 +136,7 @@ class HomeState extends Equatable {
     status,
     feed,
     mixes,
+    suggestions,
     continueListening,
     cachedTracks,
     downloads,
@@ -180,10 +182,28 @@ class HomeCubit extends Cubit<HomeState> {
     emit(state.copyWith(refreshing: refresh, clearError: true));
 
     try {
-      final feed = await _music.loadHome(refresh: refresh);
+      final searches = _library.recentSearches();
+      final feedFuture = _music.loadHome(refresh: refresh);
+      final mixesFuture = _music.dailyMixes(
+        state.continueListening,
+        recentSearches: searches,
+      );
+      final suggestionsFuture = _music.searchSuggestions(
+        searches,
+        history: state.continueListening,
+      );
+
+      final homeResults = await Future.wait([
+        feedFuture,
+        mixesFuture,
+        suggestionsFuture,
+      ]);
+
+      final feed = homeResults[0] as HomeFeed;
       final mixes = feed.isOffline
           ? const <Collection>[]
-          : await _music.dailyMixes(state.continueListening);
+          : homeResults[1] as List<Collection>;
+      final suggestions = Track.dedupe(homeResults[2] as List<Track>);
 
       if (isClosed) return;
       emit(
@@ -191,6 +211,7 @@ class HomeCubit extends Cubit<HomeState> {
           status: feed.isOffline ? HomeStatus.offline : HomeStatus.ready,
           feed: feed,
           mixes: mixes,
+          suggestions: suggestions,
           quickCards: _buildCards(feed: feed, mixes: mixes),
           refreshing: false,
           clearError: true,

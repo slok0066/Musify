@@ -79,8 +79,6 @@ class PlaylistImporter {
     caseSensitive: false,
   );
 
-  bool get handlesSomething => true;
-
   /// What kind of link the user pasted, if any.
   String? detectProvider(String url) {
     if (_youtube.hasMatch(url)) return 'YOUTUBE';
@@ -145,7 +143,6 @@ class PlaylistImporter {
     return out;
   }
 
-  // -------------------------------------------------------------- provider I/O
 
   Future<ImportedSource?> _readYoutube(String listId) async {
     try {
@@ -228,7 +225,6 @@ class PlaylistImporter {
     }
   }
 
-  // ------------------------------------------------------------------ parsing
 
   String? _ogTitle(String html) {
     final match = RegExp(
@@ -334,7 +330,6 @@ class PlaylistImporter {
       .replaceAll(r'\"', '"')
       .replaceAll(r'\\', r'\');
 
-  // ---------------------------------------------------------------- matching
 
   /// Picks the JioSaavn rendition that really is this song, or `null` rather
   /// than importing the wrong track.

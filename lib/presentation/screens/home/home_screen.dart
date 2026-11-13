@@ -139,8 +139,32 @@ class _Body extends StatelessWidget {
   /// `ALL` — the complete feed, at home in a stream.
   List<Widget> _allSections(BuildContext context, HomeState state) {
     final artists = _extractArtists(state);
+    final player = context.read<PlayerCubit>();
+    final uniqueSuggestions = Track.dedupe(state.suggestions);
 
     return [
+      if (uniqueSuggestions.isNotEmpty)
+        _rail(
+          'SUGGESTED FOR YOU',
+          [
+            for (final track in uniqueSuggestions)
+              TrackCard(
+                track: track,
+                caption: track.displayArtist,
+                frameless: true,
+                onTap: () => player.playTrack(
+                  track,
+                  context: uniqueSuggestions,
+                  source: 'SUGGESTED FOR YOU',
+                ),
+                onOptions: () => showTrackOptions(
+                  context,
+                  track,
+                  source: 'SUGGESTED FOR YOU',
+                ),
+              ),
+          ],
+        ),
       if (state.mixes.isNotEmpty)
         _rail(
           'MADE FOR YOU',
@@ -411,7 +435,10 @@ class _Body extends StatelessWidget {
             artistImageUrl: item.collection!.imageUrl);
       }
     }
-    // 2. User listening history (continueListening)
+    // 2. User listening & search history
+    for (final t in state.suggestions) {
+      add(t.artist, t.artistId);
+    }
     for (final t in state.continueListening) {
       add(t.artist, t.artistId);
     }
@@ -615,7 +642,7 @@ class _SpatialArmSwitch extends StatelessWidget {
         tooltip: state.is8D
             ? 'Turn the 8D orbit off'
             : 'Turn the 8D orbit on for everything you play',
-        onPressed: () => context.read<PlayerCubit>().set8D(!state.is8D),
+        onPressed: () => context.read<PlayerCubit>().toggle8D(),
         child: Text(
           state.is8D ? '8D ON' : 'ENABLE 8D',
           style: SwissType.micro.copyWith(
@@ -890,10 +917,18 @@ class _QuickSongRailState extends State<_QuickSongRail> {
     void add(Track? t) {
       if (t == null) return;
       if (t.imageUrl.trim().isEmpty) return;
+      // STRICT: Rotating banner card must show ONLY JioSaavn results.
+      // Exclude YouTube tracks to prevent awkward thumbnail aspect ratios.
+      if (t.isYouTube ||
+          t.source != TrackSource.saavn ||
+          t.id.startsWith('yt:') ||
+          t.imageUrl.contains('ytimg')) {
+        return;
+      }
       if (seen.add(t.dedupeKey)) songs.add(t);
     }
 
-    // 1. Live dynamically fetched latest featured hits from catalogue!
+    // 1. Live dynamically fetched latest featured hits (curated Hindi + English JioSaavn mix)
     for (final t in widget.state.featuredHits) {
       add(t);
     }
@@ -905,11 +940,15 @@ class _QuickSongRailState extends State<_QuickSongRail> {
     for (final item in widget.state.charts) {
       if (item.isTrack) add(item.track);
     }
-    // 4. Real-time top searches
+    // 4. Personalized suggestions (only JioSaavn will pass through)
+    for (final t in widget.state.suggestions) {
+      add(t);
+    }
+    // 5. Real-time top searches
     for (final t in widget.state.topSearches) {
       add(t);
     }
-    // 5. Offline fallback only if songs is still empty
+    // 6. Offline fallback only if songs is still empty
     if (songs.isEmpty) {
       for (final t in widget.state.continueListening) {
         add(t);

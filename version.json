@@ -1,8 +1,8 @@
 {
-  "version": "1.0.24",
-  "build": 25,
-  "release_notes": "• Personalized greeting: set your name to customize your morning mountain atmosphere\n• Name onboarding persists directly until given\n• Added Display Name editor in Settings ▸ Interface\n• Favorite artists enlarged circular portraits",
-  "download_url": "https://github.com/slok0066/Musify/releases/download/v1.0.24/app-arm64-v8a-release.apk",
-  "apk_url": "https://github.com/slok0066/Musify/releases/download/v1.0.24/app-arm64-v8a-release.apk",
+  "version": "2.0.0",
+  "build": 45,
+  "release_notes": "• Major v2.0.0 Release: Brand New App Icon & Launcher Logo\n• Seamless Mountain Atmosphere with adaptive sky fill across all daily phases\n• Clean Production UI: Streamlined minimal typography with unified playback\n• Curated Featured Hits: Dynamic blend of trending Hindi & English charts\n• YouTube-First Engine & Real-time 8D Binaural Audio",
+  "download_url": "https://github.com/slok0066/Musify/releases/download/v2.0.0/app-arm64-v8a-release.apk",
+  "apk_url": "https://github.com/slok0066/Musify/releases/download/v2.0.0/app-arm64-v8a-release.apk",
   "mandatory": false
 }

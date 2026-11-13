@@ -6,7 +6,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../core/theme/swiss_tokens.dart';
 import '../../../core/theme/tactile_decorations.dart';
 import '../../../core/utils/formatters.dart';
-import '../../../services/settings_service.dart';
 import '../../cubits/library_cubit.dart';
 import '../../cubits/player_cubit.dart';
 import '../../widgets/artwork_color.dart';
@@ -120,7 +119,6 @@ class _Face extends StatelessWidget {
                           const _TopBar(),
                           const SizedBox(height: SwissGrid.md),
 
-                        // ------------------------------------------------------- plate
                         Padding(
                           padding: const EdgeInsets.symmetric(
                               horizontal: SwissGrid.gutter),
@@ -161,7 +159,6 @@ class _Face extends StatelessWidget {
                           ),
                         ),
 
-                        // ------------------------------------------------------- titles & like
                         Padding(
                           padding: const EdgeInsets.fromLTRB(
                             SwissGrid.gutter,
@@ -248,7 +245,6 @@ class _Face extends StatelessWidget {
                           ),
                         ),
 
-                  // -------------------------------------------------- status pill
                   Padding(
                     padding: const EdgeInsets.fromLTRB(
                         SwissGrid.gutter, 0, SwissGrid.gutter, SwissGrid.sm),
@@ -284,7 +280,6 @@ class _Face extends StatelessWidget {
                     ),
                   ),
 
-                  // ------------------------------------------------------- status
                   if (state.errorText != null)
                     _Banner(
                       icon: Icons.error_outline,
@@ -300,7 +295,6 @@ class _Face extends StatelessWidget {
                       text: 'TAP IN HEADPHONES FOR THE FULL 3D ORBIT',
                     ),
 
-                  // -------------------------------------------------------- seek
                   Padding(
                     padding: const EdgeInsets.fromLTRB(
                         SwissGrid.gutter, SwissGrid.sm, SwissGrid.gutter, 0),
@@ -313,7 +307,6 @@ class _Face extends StatelessWidget {
                   ),
                   const SizedBox(height: SwissGrid.md),
 
-                  // --------------------------------------------------- transport
                   Padding(
                     padding: const EdgeInsets.symmetric(
                         horizontal: SwissGrid.gutter),
@@ -385,7 +378,6 @@ class _Face extends StatelessWidget {
                   const Spacer(),
                   const SizedBox(height: SwissGrid.md),
 
-                  // ------------------------------------------------ action strip
                   Padding(
                     padding: const EdgeInsets.symmetric(
                         horizontal: SwissGrid.gutter),
@@ -415,7 +407,7 @@ class _Face extends StatelessWidget {
                               selected: state.is8D,
                               onTap: () {
                                 Haptics.commit();
-                                player.set8D(!state.is8D);
+                                player.toggle8D();
                               },
                               onLongPress: () =>
                                   showEightDCalibration(context),

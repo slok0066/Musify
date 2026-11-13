@@ -45,7 +45,24 @@ Never cut: validation at trust boundaries, error handling that prevents data los
    - Maintain flat surfaces, crisp 1px/0.5px hairline borders, and generous breathing room.
 
 4. **Only Generate ARM64-v8a APK (Never Other ABIs)**:
-   - When building an APK (upon explicit confirmation), ALWAYS and ONLY generate the `arm64-v8a` target (`flutter build apk --target-platform android-arm64`).
+   - When building an APK (upon explicit confirmation), ALWAYS and ONLY generate the `arm64-v8a` target with split ABIs: `flutter build apk --release --split-per-abi --target-platform android-arm64`.
    - Do NOT generate armeabi-v7a, x86_64, or fat universal APKs. Only produce `app-arm64-v8a-release.apk`.
+   - Always install the split `app-arm64-v8a-release.apk`, never the non-split `app-release.apk`. Split builds add 2000 to the versionCode (e.g. 28 → 2028), so a non-split build with the lower code is rejected as a downgrade and some installers show the generic **"You can't install this app on this device"**. If a non-split APK is ever needed, its versionCode must be above the installed split code.
+
+5. **Release Trigger Protocols (`activate protocol doomsday` vs `activate protocol mini`)**:
+   - The exact phrases **"activate protocol doomsday"** and **"activate protocol mini"** serve as explicit commands to build, tag, and publish the update to GitHub releases and `version.json`:
+     - **`activate protocol doomsday` (Major Release)**:
+       - Indicates a major application release.
+       - Increment the **major version** (e.g. `1.x` → `2.x`, `1.5` → `2.5`).
+       - Bump `version` in `pubspec.yaml`, `kAppVersion`/`kAppBuild` in `lib/core/build_info.dart`, and `version.json`.
+       - Build the release APK: `flutter build apk --release --split-per-abi --target-platform android-arm64`.
+       - Commit changes, create and push git tag `v<version>`, publish GitHub release with `app-arm64-v8a-release.apk`, and update remote `version.json`.
+     - **`activate protocol mini` (Minor Release)**:
+       - Indicates a minor or standard iterative update.
+       - Increment the **minor version** (e.g. `1.5` → `1.6`, or next decimal version).
+       - Bump `version` in `pubspec.yaml`, `kAppVersion`/`kAppBuild` in `lib/core/build_info.dart`, and `version.json`.
+       - Build the release APK: `flutter build apk --release --split-per-abi --target-platform android-arm64`.
+       - Commit changes, create and push git tag `v<version>`, publish GitHub release with `app-arm64-v8a-release.apk`, and update remote `version.json`.
+   - Outside of these two explicit protocol activation phrases, Rule 2 ("Never release or push updates automatically") remains strictly in effect.
 
 (Yes, this file also applies to agents working on the ponytail repo itself. Especially to them.)

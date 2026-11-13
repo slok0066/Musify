@@ -16,24 +16,28 @@ enum TimeOfDayBucket {
     greeting: 'Good Morning,',
     label: 'DAWN // 05:00 – 12:00',
     accentColor: Color(0xFFF59E0B),
+    skyTopColor: Color(0xFF87B6E1),
   ),
   noon(
     assetPath: 'assets/mountains/mountain-noon.webp',
     greeting: 'Good Afternoon,',
     label: 'MIDDAY // 12:00 – 17:00',
     accentColor: Color(0xFF38BDF8),
+    skyTopColor: Color(0xFF9EC7EA),
   ),
   evening(
     assetPath: 'assets/mountains/mountain-evening.webp',
     greeting: 'Good Evening,',
     label: 'DUSK // 17:00 – 21:00',
     accentColor: Color(0xFFC084FC),
+    skyTopColor: Color(0xFF58709C),
   ),
   night(
     assetPath: 'assets/mountains/mountain-night.webp',
     greeting: 'Good Night,',
     label: 'NIGHT // 21:00 – 05:00',
     accentColor: Color(0xFF818CF8),
+    skyTopColor: Color(0xFF0D1E32),
   );
 
   const TimeOfDayBucket({
@@ -41,12 +45,14 @@ enum TimeOfDayBucket {
     required this.greeting,
     required this.label,
     required this.accentColor,
+    required this.skyTopColor,
   });
 
   final String assetPath;
   final String greeting;
   final String label;
   final Color accentColor;
+  final Color skyTopColor;
 
   static TimeOfDayBucket current() {
     final hour = DateTime.now().hour;
@@ -146,6 +152,13 @@ class _MountainAtmosphereHeroState extends State<MountainAtmosphereHero>
         child: Stack(
           fit: StackFit.expand,
           children: [
+            // Seamless top sky background extension
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 850),
+              curve: Curves.easeInOutCubic,
+              color: _bucket.skyTopColor,
+            ),
+
             // Mountain Background with smooth cross-fade transition
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 850),
@@ -155,10 +168,32 @@ class _MountainAtmosphereHeroState extends State<MountainAtmosphereHero>
                 _bucket.assetPath,
                 key: ValueKey<String>(_bucket.assetPath),
                 fit: BoxFit.cover,
-                alignment: const Alignment(0, -0.25),
+                alignment: const Alignment(0, 0.20),
                 width: double.infinity,
                 height: double.infinity,
                 filterQuality: FilterQuality.medium,
+              ),
+            ),
+
+            // Soft sky blending gradient at the top edge
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              height: 48 + topPadding,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 850),
+                curve: Curves.easeInOutCubic,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      _bucket.skyTopColor,
+                      _bucket.skyTopColor.withValues(alpha: 0.0),
+                    ],
+                  ),
+                ),
               ),
             ),
 

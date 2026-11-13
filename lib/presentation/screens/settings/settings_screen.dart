@@ -14,6 +14,8 @@ import '../../../core/utils/formatters.dart';
 import '../../../services/service_locator.dart';
 import '../../../services/settings_service.dart';
 import '../../../services/update_service.dart';
+import '../../../services/yt_first/yt_first_config.dart';
+import '../update/update_screen.dart';
 import '../../cubits/navigation_cubit.dart';
 import '../../cubits/player_cubit.dart';
 import '../../cubits/settings_cubit.dart';
@@ -21,7 +23,6 @@ import '../../widgets/eight_d_calibration_sheet.dart';
 import '../../widgets/screen_header.dart';
 import '../../widgets/tactile_eight_d_switch.dart';
 import '../../widgets/tactile_slider.dart';
-import '../../widgets/track_options_sheet.dart';
 
 /// `04 // SETTINGS` — the audio engineering lab, the storage bay and the
 /// backup drawer.
@@ -102,7 +103,6 @@ class _SettingsView extends StatelessWidget {
               child: ListView(
                 padding: const EdgeInsets.only(bottom: SwissGrid.xxl),
                 children: [
-                  // ------------------------------------------------- quality
                   const _SectionLabel(index: '01', title: 'STREAMING QUALITY'),
                   _QualityGroup(
                     label: 'WI-FI / UNMETERED',
@@ -123,7 +123,6 @@ class _SettingsView extends StatelessWidget {
                     onSelected: cubit.setDownloadQuality,
                   ),
 
-                  // ---------------------------------------------------- spatial
                   const _SectionLabel(index: '02', title: 'SPATIAL 8D ENGINE'),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: SwissGrid.gutter),
@@ -145,7 +144,6 @@ class _SettingsView extends StatelessWidget {
                     child: EightDControls(),
                   ),
 
-                  // ------------------------------------------------------- EQ
                   const _SectionLabel(index: '03', title: 'EQUALISER'),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: SwissGrid.gutter),
@@ -219,7 +217,6 @@ class _SettingsView extends StatelessWidget {
                     ),
                   ),
 
-                  // -------------------------------------------------- playback
                   const _SectionLabel(index: '04', title: 'PLAYBACK BEHAVIOUR'),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: SwissGrid.gutter),
@@ -269,11 +266,19 @@ class _SettingsView extends StatelessWidget {
                           value: settings.instantStart,
                           onChanged: cubit.setInstantStart,
                         ),
+                        if (YtFirstConfig.enabled)
+                          SettingsToggleRow(
+                            label: 'YOUTUBE FIRST',
+                            hint: settings.ytFirstEnabled
+                                ? 'SEARCH YOUTUBE, FALL BACK TO JIOSAAVN'
+                                : 'SEARCH JIOSAAVN ONLY',
+                            value: settings.ytFirstEnabled,
+                            onChanged: cubit.setYtFirst,
+                          ),
                       ],
                     ),
                   ),
 
-                  // ------------------------------------------------- interface
                   const _SectionLabel(index: '05', title: 'INTERFACE'),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: SwissGrid.gutter),
@@ -340,7 +345,6 @@ class _SettingsView extends StatelessWidget {
                     ),
                   ),
 
-                  // --------------------------------------------------- storage
                   const _SectionLabel(index: '06', title: 'STORAGE'),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: SwissGrid.gutter),
@@ -403,7 +407,6 @@ class _SettingsView extends StatelessWidget {
                     ),
                   ),
 
-                  // ---------------------------------------------------- backup
                   const _SectionLabel(index: '07', title: 'BACKUP & RESTORE'),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: SwissGrid.gutter),
@@ -441,7 +444,6 @@ class _SettingsView extends StatelessWidget {
                     ),
                   ),
 
-                  // ----------------------------------------------------- credit
                   const SizedBox(height: SwissGrid.xl),
                   Center(
                     child: Padding(
@@ -521,7 +523,7 @@ class _SettingsView extends StatelessWidget {
     scaffold.hideCurrentSnackBar();
 
     if (info != null && info.hasUpdate) {
-      UpdateService.showUpdateDialog(context, info);
+      showUpdateDialog(context, info);
     } else {
       scaffold.showSnackBar(
         SnackBar(

@@ -52,9 +52,6 @@ class EqPreset {
   ];
 }
 
-/// Live Badge / waveform decay.
-enum RepeatMode { off, all, one }
-
 /// Every user-facing knob in Musify.
 ///
 /// One immutable object, one JSON blob in `SharedPreferences`, one
@@ -82,6 +79,7 @@ class MusifySettings {
     this.visualizer = VisualizerMode.fft,
     this.prefetchNext = true,
     this.instantStart = true,
+    this.ytFirstEnabled = true,
     this.hasSeenCredits = false,
     this.hasEnteredName = false,
     this.userName = '',
@@ -122,6 +120,10 @@ class MusifySettings {
   /// start, useful for ruling this feature out when something sounds wrong.
   final bool instantStart;
 
+  /// YouTube-first test: search YouTube and use Saavn only when YouTube yields
+  /// nothing. Off is exactly Saavn-only.
+  final bool ytFirstEnabled;
+
   /// True once the one-time first launch credits page has been dismissed.
   final bool hasSeenCredits;
 
@@ -130,11 +132,6 @@ class MusifySettings {
 
   /// User display name shown in home greeting.
   final String userName;
-
-  AudioQuality get effectiveStreamQuality => wifiQuality;
-
-  bool get is8DCustomised =>
-      orbitSeconds != 10.0 || reverbMix != 0.24 || !rearLowPassEnabled;
 
   MusifySettings copyWith({
     AudioQuality? wifiQuality,
@@ -155,6 +152,7 @@ class MusifySettings {
     VisualizerMode? visualizer,
     bool? prefetchNext,
     bool? instantStart,
+    bool? ytFirstEnabled,
     bool? hasSeenCredits,
     bool? hasEnteredName,
     String? userName,
@@ -178,6 +176,7 @@ class MusifySettings {
       visualizer: visualizer ?? this.visualizer,
       prefetchNext: prefetchNext ?? this.prefetchNext,
       instantStart: instantStart ?? this.instantStart,
+      ytFirstEnabled: ytFirstEnabled ?? this.ytFirstEnabled,
       hasSeenCredits: hasSeenCredits ?? this.hasSeenCredits,
       hasEnteredName: hasEnteredName ?? this.hasEnteredName,
       userName: userName ?? this.userName,
@@ -203,6 +202,7 @@ class MusifySettings {
     'visualizer': visualizer.name,
     'prefetchNext': prefetchNext,
     'instantStart': instantStart,
+    'ytFirstEnabled': ytFirstEnabled,
     'hasSeenCredits': hasSeenCredits,
     'hasEnteredName': hasEnteredName,
     'userName': userName,
@@ -263,6 +263,7 @@ class MusifySettings {
       visualizer: enumAt('visualizer', VisualizerMode.values, VisualizerMode.fft),
       prefetchNext: boolAt('prefetchNext', true),
       instantStart: boolAt('instantStart', true),
+      ytFirstEnabled: boolAt('ytFirstEnabled', true),
       hasSeenCredits: boolAt('hasSeenCredits', false),
       hasEnteredName: boolAt('hasEnteredName', false),
       userName: map['userName']?.toString() ?? '',
@@ -418,6 +419,9 @@ class SettingsService extends ValueNotifier<MusifySettings> {
     update(transform(value));
   }
 
+  /// Awaits flushing any pending in-flight persistence.
+  Future<void> flush() => _persist();
+
   Future<void> _persist() async {
     try {
       _prefs ??= await SharedPreferences.getInstance();
@@ -444,10 +448,5 @@ class SettingsService extends ValueNotifier<MusifySettings> {
           .catchError((Object _) => false),
     );
     _writeUserNameSync(clean);
-  }
-
-  /// Restores settings from a backup payload.
-  Future<void> restoreFrom(MusifySettings settings) async {
-    update(settings);
   }
 }

@@ -4,8 +4,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../core/theme/swiss_tokens.dart';
 import '../../core/theme/tactile_decorations.dart';
 import '../cubits/settings_cubit.dart';
+import 'sheet_components.dart';
 import 'tactile_slider.dart';
-import 'track_options_sheet.dart';
+
+export 'sheet_components.dart' show SettingsToggleRow, MusifySheetShell, MusifySheetHeader;
 
 /// The 8D calibration console.
 ///
@@ -150,59 +152,6 @@ class EightDControls extends StatelessWidget {
           ],
         );
       },
-    );
-  }
-}
-
-/// A label + hint + physical switch row. Every settings group is built from it.
-class SettingsToggleRow extends StatelessWidget {
-  const SettingsToggleRow({
-    required this.label,
-    required this.hint,
-    required this.value,
-    required this.onChanged,
-    this.enabled = true,
-    super.key,
-  });
-
-  final String label;
-  final String hint;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-  final bool enabled;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = SwissTokens.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: SwissGrid.md),
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: t.hairline, width: 1)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  label,
-                  style: SwissType.label.copyWith(color: enabled ? t.ink : t.inkFaint),
-                ),
-                const SizedBox(height: 2),
-                Text(hint, style: SwissType.micro.copyWith(color: t.inkFaint, fontSize: 9)),
-              ],
-            ),
-          ),
-          const SizedBox(width: SwissGrid.sm),
-          TactileSwitch(
-            value: value,
-            onChanged: enabled ? onChanged : (_) {},
-            semanticLabel: label,
-          ),
-        ],
-      ),
     );
   }
 }

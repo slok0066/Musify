@@ -9,7 +9,6 @@ import 'package:flutter/foundation.dart';
 // ignore_for_file: experimental_member_use
 
 import '../../data/models/track.dart';
-import '../settings_service.dart';
 import 'playback_service.dart';
 
 /// Android / iOS bridge between the platform and [PlaybackService].
@@ -55,7 +54,6 @@ class MusifyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler
   /// Last published position, so a paused player does not spam the platform.
   Duration _lastPosition = Duration.zero;
 
-  // ------------------------------------------------------------------ session
 
   /// Configures the OS audio session. Safe to call from `main()` inside the
   /// startup timeout: any failure just means the OS keeps its defaults.
@@ -170,7 +168,6 @@ class MusifyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler
     }
   }
 
-  // ------------------------------------------------------------------ mirror
 
   void _attach() {
     void listen(ValueListenable<Object?> notifier) {
@@ -283,7 +280,6 @@ class MusifyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler
     },
   );
 
-  // -------------------------------------------------------------- commands
 
   @override
   Future<void> play() => _player.resume();
@@ -335,7 +331,7 @@ class MusifyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler
 
   @override
   Future<void> customAction(String name, [Map<String, dynamic>? extras]) async {
-    if (name == '8D Audio' || name == 'toggle8D' || name == 'toggle_8d') {
+    if (name == '8D Audio') {
       _player.toggle8D();
     }
   }

@@ -187,7 +187,6 @@ void configureDependencies() {
     () => PlayerCubit(
       player: locator<PlaybackService>(),
       library: locator<LibraryRepository>(),
-      music: locator<MusicRepository>(),
       store: locator<LocalStore>(),
     ),
   );

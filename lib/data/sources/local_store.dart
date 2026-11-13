@@ -150,7 +150,6 @@ class LocalStore {
         'liked=${readLiked().length}, downloads=${readDownloads().length})';
   }
 
-  // -------------------------------------------------------------------- liked
 
   List<Track> readLiked() => Track.listFrom(_readBox(likedBox, _liked, 'items'));
 
@@ -159,7 +158,6 @@ class LocalStore {
     _bump();
   }
 
-  // ---------------------------------------------------------------- playlists
 
   List<UserPlaylist> readPlaylists() {
     final raw = _readBox(playlistsBox, _playlists, 'items');
@@ -182,7 +180,6 @@ class LocalStore {
     _bump();
   }
 
-  // ---------------------------------------------------------------- downloads
 
   List<Track> readDownloads() =>
       Track.listFrom(_readBox(downloadsBox, _downloads, 'items'))
@@ -194,7 +191,6 @@ class LocalStore {
     _bump();
   }
 
-  // ------------------------------------------------------------------ history
 
   /// Most-recent-first listening history.
   List<Track> readHistory() =>
@@ -217,7 +213,6 @@ class LocalStore {
     _bump();
   }
 
-  // ----------------------------------------------------------------- searches
 
   List<String> readSearches() {
     final raw = _readBox(searchesBox, _searches, 'items');
@@ -244,7 +239,6 @@ class LocalStore {
     await _writeBox(searchesBox, _searches, 'items', <String>[]);
   }
 
-  // ------------------------------------------------- lately played collections
 
   /// The four most recent albums/playlists, used by the Home quick grid.
   List<Map<String, dynamic>> readRecentCollections() {
@@ -267,7 +261,6 @@ class LocalStore {
     await _writeBox(collectionsBox, _collections, 'items', next);
   }
 
-  // ------------------------------------------------------------------- backup
 
   Map<String, dynamic> exportAll() => {
     'version': 1,

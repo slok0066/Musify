@@ -24,10 +24,6 @@ extension AppTabLabel on AppTab {
   String get title => '$ordinal // $label';
 }
 
-/// Owns the `IndexedStack` index.
-///
-/// Deliberately trivial: the shell keeps all four screens alive, so switching
-/// tabs is a single integer change with no rebuild of the tabs themselves.
 class NavigationCubit extends Cubit<AppTab> {
   NavigationCubit() : super(AppTab.home);
 
@@ -35,10 +31,5 @@ class NavigationCubit extends Cubit<AppTab> {
     if (tab == state) return;
     Haptics.tap();
     emit(tab);
-  }
-
-  void selectIndex(int index) {
-    if (index < 0 || index >= AppTab.values.length) return;
-    select(AppTab.values[index]);
   }
 }

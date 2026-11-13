@@ -60,7 +60,7 @@ class SwissErrorCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const t = SwissTokens.carbon;
+    final t = SwissTokens.of(context);
 
     return Directionality(
       textDirection: TextDirection.ltr,
@@ -141,7 +141,7 @@ class _ErrorKeycap extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const t = SwissTokens.carbon;
+    final t = SwissTokens.of(context);
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
@@ -149,11 +149,7 @@ class _ErrorKeycap extends StatelessWidget {
         padding: const EdgeInsets.symmetric(
             horizontal: SwissGrid.md, vertical: SwissGrid.sm),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [t.keycapTop, t.keycapBottom],
-          ),
+          color: t.keycapTop,
           border: Border.all(color: t.hairlineStrong),
           borderRadius: BorderRadius.circular(SwissTokens.radius),
         ),

@@ -127,7 +127,6 @@ class SettingsCubit extends Cubit<SettingsState> {
 
   void _update(MusifySettings next) => _settings.update(next);
 
-  // --------------------------------------------------------------- quality
 
   void setWifiQuality(AudioQuality quality) =>
       _update(_settings.value.copyWith(wifiQuality: quality));
@@ -138,7 +137,6 @@ class SettingsCubit extends Cubit<SettingsState> {
   void setDownloadQuality(AudioQuality quality) =>
       _update(_settings.value.copyWith(downloadQuality: quality));
 
-  // ------------------------------------------------------------- 8D spatial
 
   void setOrbitSeconds(double seconds) =>
       _player.update8DParameters(orbitSeconds: seconds.clamp(5.0, 20.0));
@@ -157,7 +155,6 @@ class SettingsCubit extends Cubit<SettingsState> {
     _message('8D CALIBRATION RESET TO FACTORY');
   }
 
-  // -------------------------------------------------------------- equaliser
 
   void setEqEnabled(bool enabled) => _player.setEqualizer(enabled: enabled);
 
@@ -193,7 +190,8 @@ class SettingsCubit extends Cubit<SettingsState> {
   void setInstantStart(bool enabled) =>
       _update(_settings.value.copyWith(instantStart: enabled));
 
-  // --------------------------------------------------------------- interface
+  void setYtFirst(bool enabled) =>
+      _update(_settings.value.copyWith(ytFirstEnabled: enabled));
 
   void setTheme(ChassisTheme theme) => _update(_settings.value.copyWith(theme: theme));
 
@@ -220,7 +218,6 @@ class SettingsCubit extends Cubit<SettingsState> {
     ));
   }
 
-  // ----------------------------------------------------------------- storage
 
   Future<void> refreshStorage() async {
     try {
@@ -258,7 +255,6 @@ class SettingsCubit extends Cubit<SettingsState> {
     _message(freed <= 0 ? 'NOTHING TO DELETE' : 'FREED ${_mb(freed)}');
   }
 
-  // ------------------------------------------------------------------ backup
 
   Future<String?> exportBackup() async {
     emit(state.copyWith(busy: true));
@@ -285,7 +281,6 @@ class SettingsCubit extends Cubit<SettingsState> {
     return result;
   }
 
-  // ------------------------------------------------------------------ helper
 
   void _message(String message) {
     if (isClosed) return;

@@ -89,13 +89,6 @@ class JioSaavnClient {
   final Map<String, LaunchPayload> _launchCache = {};
   DateTime? _launchFetchedAt;
 
-  void clearCaches() {
-    _resolvedCache.clear();
-    _launchCache.clear();
-    _launchFetchedAt = null;
-  }
-
-  // ---------------------------------------------------------------- transport
 
   /// Issues an `api.php` call and decodes the JSON payload.
   ///
@@ -128,7 +121,7 @@ class JioSaavnClient {
       if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return null;
       return jsonDecode(trimmed);
     } catch (e) {
-      debugPrint('JioSaavn $_call failed: $e');
+      debugPrint('JioSaavn $function failed: $e');
       return null;
     }
   }
@@ -143,7 +136,6 @@ class JioSaavnClient {
     return const [];
   }
 
-  // ------------------------------------------------------------------- public
 
   /// The whole Home feed from a single `webapi.getLaunchData` call, cached for
   /// ten minutes so pull-to-refresh is meaningful but tab switching never
@@ -190,37 +182,6 @@ class JioSaavnClient {
     return _asList(raw).map(_parseSong).whereType<Track>().toList();
   }
 
-  /// Additional charts (`content.getCharts`) — richer than launch data's set.
-  Future<List<Collection>> fetchCharts() async {
-    final raw = await _call('content.getCharts');
-    return _asList(raw)
-        .map(
-          (e) => Collection(
-            id: _str(e['id']),
-            title: Fmt.cleanTitle(_str(e['title'])),
-            kind: CollectionKind.chart,
-            subtitle: 'JIOSAAVN',
-            imageUrl: hires(_str(e['image'])),
-            songCount: _int(e['count']),
-            permaUrl: _str(e['perma_url']),
-            permaToken: _token(e['perma_url']),
-          ),
-        )
-        .where((c) => c.id.isNotEmpty)
-        .toList();
-  }
-
-  /// Featured/editorial playlists — used for the daily mixes fallback.
-  Future<List<Collection>> fetchFeaturedPlaylists({int limit = 20}) async {
-    final raw = await _call('content.getFeaturedPlaylists', {'n': '$limit'});
-    final map = _asMap(raw);
-    return _asList(map?['data'])
-        .map(_parseCollectionLike)
-        .whereType<Collection>()
-        .toList();
-  }
-
-  // ------------------------------------------------------------------ search
 
   Future<List<Track>> searchSongs(
     String query, {
@@ -275,7 +236,6 @@ class JioSaavnClient {
     return Track.dedupe(tracks).map((t) => t.title).toSet().take(7).toList();
   }
 
-  // ------------------------------------------------------------------ detail
 
   /// Resolves an album (either by numeric id or perma token).
   Future<CollectionDetail?> albumDetail(Collection collection) async {
@@ -323,6 +283,7 @@ class JioSaavnClient {
   ///
   /// `playlist.getDetails` paginates hard (25 per page), so long charts are
   /// walked until `list_count` is satisfied or a page comes back empty.
+  /// Falls back to `webapi.get` (token/slug) and search to prevent empty lists.
   Future<CollectionDetail?> playlistDetail(
     Collection collection, {
     int maxTracks = 100,
@@ -334,27 +295,73 @@ class JioSaavnClient {
     String? resolvedImage;
     String? description;
 
-    while (tracks.length < maxTracks && page <= 5) {
-      final raw = await _call('playlist.getDetails', {
-        'listid': collection.id,
-        'n': '50',
-        'p': '$page',
-      });
-      final map = _asMap(raw);
-      if (map == null) break;
+    final isNumericId = int.tryParse(collection.id) != null;
+    if (isNumericId) {
+      while (tracks.length < maxTracks && page <= 5) {
+        final raw = await _call('playlist.getDetails', {
+          'listid': collection.id,
+          'n': '50',
+          'p': '$page',
+        });
+        final map = _asMap(raw);
+        if (map == null) break;
 
-      resolvedTitle ??= Fmt.cleanTitle(_str(map['title']));
-      resolvedImage ??= hires(_str(map['image']));
-      description ??= Fmt.cleanTitle(_str(map['header_desc']));
-      total = _int(map['list_count']) ?? total;
+        resolvedTitle ??= Fmt.cleanTitle(_str(map['title']));
+        resolvedImage ??= hires(_str(map['image']));
+        description ??= Fmt.cleanTitle(_str(map['header_desc']));
+        total = _int(map['list_count']) ?? total;
 
-      final batch = _asList(map['list']).map(_parseSong).whereType<Track>().toList();
-      if (batch.isEmpty) break;
-      tracks.addAll(batch);
+        final batch = _asList(map['list'] ?? map['songs']).map(_parseSong).whereType<Track>().toList();
+        if (batch.isEmpty) break;
+        tracks.addAll(batch);
 
-      if (total > 0 && tracks.length >= total) break;
-      if (batch.length < 25) break;
-      page++;
+        if (total > 0 && tracks.length >= total) break;
+        if (batch.length < 25) break;
+        page++;
+      }
+    }
+
+    if (tracks.isEmpty) {
+      final token = collection.token ?? (isNumericId ? null : collection.id);
+      if (token != null && token.isNotEmpty) {
+        final byToken = await _call('webapi.get', {
+          'token': token,
+          'type': 'playlist',
+          'n': '$maxTracks',
+        });
+        final map = _asMap(byToken);
+        if (map != null) {
+          resolvedTitle ??= Fmt.cleanTitle(_str(map['title']));
+          resolvedImage ??= hires(_str(map['image']));
+          description ??= Fmt.cleanTitle(_str(map['header_desc']));
+          tracks.addAll(
+            _asList(map['list'] ?? map['songs'])
+                .map(_parseSong)
+                .whereType<Track>(),
+          );
+        }
+      }
+    }
+
+    if (tracks.isEmpty && collection.title.trim().isNotEmpty) {
+      final searchResults = await searchPlaylists(collection.title, limit: 3);
+      if (searchResults.isNotEmpty && searchResults.first.id != collection.id) {
+        final fallback = await playlistDetail(searchResults.first, maxTracks: maxTracks);
+        if (fallback != null && fallback.tracks.isNotEmpty) {
+          return fallback;
+        }
+      }
+    }
+
+    if (tracks.isEmpty && collection.title.trim().isNotEmpty) {
+      final fallbackSongs = await searchSongs(collection.title, limit: 30);
+      if (fallbackSongs.isNotEmpty) {
+        return CollectionDetail(
+          collection: collection.copyWith(songCount: fallbackSongs.length),
+          tracks: Track.dedupe(fallbackSongs),
+          description: 'CURATED TRACKS · ${collection.title}',
+        );
+      }
     }
 
     if (tracks.isEmpty) return null;
@@ -470,7 +477,6 @@ class JioSaavnClient {
     );
   }
 
-  // ------------------------------------------------------------------ streams
 
   /// Resolves a playable URL for [songId] at up to [preferredKbps].
   ///
@@ -524,9 +530,7 @@ class JioSaavnClient {
     _encryptedMediaCache.putIfAbsent(songId, () => encrypted);
   }
 
-  // ------------------------------------------------------------------ parsing
 
-  // --------------------------------------------------------- Law 7 test seams
   //
   // The coercers below are private because the app only ever reaches them
   // through a network call — which used to make hostile-payload behaviour
@@ -696,7 +700,6 @@ class JioSaavnClient {
     );
   }
 
-  // ------------------------------------------------------------------ helpers
 
   /// `-150x150.jpg` → `-500x500.jpg`. The CDN serves any square size up to 500
   /// and the catalogue only ever advertises the thumbnail.

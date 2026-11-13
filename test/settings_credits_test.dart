@@ -96,7 +96,7 @@ void main() {
 
     // What the cubit does when the user taps `ENTER MUSIFY`.
     first.update(first.value.copyWith(hasSeenCredits: true));
-    await Future<void>.delayed(const Duration(milliseconds: 20));
+    await first.flush();
 
     final next = SettingsService();
     await next.load();

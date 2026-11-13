@@ -113,31 +113,3 @@ class CollectionDetail {
 
   bool get isEmpty => tracks.isEmpty;
 }
-
-/// A named rail on the Home screen.
-class HomeRail {
-  const HomeRail({
-    required this.title,
-    required this.index,
-    required this.items,
-    this.kind = CollectionKind.playlist,
-    this.subtitle,
-    this.tracksArePlayable = false,
-    this.tracks = const [],
-  });
-
-  final String title;
-
-  /// The `01 //` ordinal rendered before the title.
-  final String index;
-  final List<Collection> items;
-  final CollectionKind kind;
-  final String? subtitle;
-
-  /// Some rails (Recently Played, Daily Mixes) are a flat list of playable
-  /// tracks rather than collections.
-  final bool tracksArePlayable;
-  final List<Track> tracks;
-
-  bool get isEmpty => items.isEmpty && tracks.isEmpty;
-}

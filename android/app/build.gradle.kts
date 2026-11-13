@@ -36,15 +36,20 @@ android {
         // step later instead — see the `packaging` block below.
     }
 
-    // PRD §1: ARM64-v8a + ARMv7 only, no x86/x86_64 emulation payload.
+    // ARM64-v8a only: no ARMv7 support and no x86/x86_64 emulation payload.
+    // Plugins (SoLoud, jni, masko) ship prebuilt libs for several ABIs; strip
+    // everything that is not arm64 so the APK contains exactly one ABI.
     //
     // Packaging filters run *after* variant configuration, so unlike
     // `ndk.abiFilters` they cannot be reset by the Flutter plugin and cannot
-    // conflict with `splits.abi`. Anything x86 that a third-party plugin
-    // ships (SoLoud ships x86_64 emulator libraries) is stripped here.
+    // conflict with `splits.abi`.
     packaging {
         jniLibs {
-            excludes += listOf("lib/x86/**", "lib/x86_64/**")
+            excludes += listOf(
+                "lib/armeabi-v7a/**",
+                "lib/x86/**",
+                "lib/x86_64/**",
+            )
         }
     }
 

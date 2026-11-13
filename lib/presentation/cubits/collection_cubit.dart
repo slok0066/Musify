@@ -29,8 +29,6 @@ class CollectionState extends Equatable {
   final List<Collection> similarArtists;
   final String? errorText;
 
-  bool get isEmpty => status == CollectionStatus.empty;
-
   @override
   List<Object?> get props => [
     status,
@@ -60,8 +58,6 @@ class CollectionCubit extends Cubit<CollectionState> {
   final LibraryRepository _library;
   final Collection _seed;
 
-  Collection get seed => _seed;
-
   Future<void> load() async {
     emit(CollectionState(collection: _seed, status: CollectionStatus.loading));
     try {
@@ -79,52 +75,24 @@ class CollectionCubit extends Cubit<CollectionState> {
         return;
       }
 
-      unawaited(_library.recordCollection(detail.collection));
+      final resolvedCollection = _seed.kind == CollectionKind.mix ||
+              _seed.title == 'Weekly Mix' ||
+              _seed.title == 'Chill Out'
+          ? detail.collection.copyWith(
+              title: _seed.title,
+              subtitle: _seed.subtitle.isNotEmpty
+                  ? _seed.subtitle
+                  : detail.collection.subtitle,
+            )
+          : detail.collection;
+      unawaited(_library.recordCollection(resolvedCollection));
       emit(
         CollectionState(
-          collection: detail.collection,
+          collection: resolvedCollection,
           tracks: detail.tracks,
           description: detail.description,
           artistBio: detail.artistBio,
           similarArtists: detail.similarArtists,
-          status: CollectionStatus.ready,
-        ),
-      );
-    } catch (e) {
-      if (isClosed) return;
-      emit(
-        CollectionState(
-          collection: _seed,
-          status: CollectionStatus.error,
-          errorText: 'COULD NOT LOAD THIS COLLECTION',
-        ),
-      );
-    }
-  }
-
-  /// The genre tiles fall back to a curated query when the channel cannot be
-  /// resolved, which the repository owns.
-  Future<void> loadGenreFallback(String query) async {
-    emit(CollectionState(collection: _seed, status: CollectionStatus.loading));
-    try {
-      final detail = await _music.loadGenreByQuery(query) ??
-          await _music.loadCollection(_seed);
-      if (isClosed) return;
-      if (detail == null || detail.tracks.isEmpty) {
-        emit(
-          CollectionState(
-            collection: _seed,
-            status: CollectionStatus.empty,
-            errorText: 'NOTHING PLAYABLE IN THIS COLLECTION',
-          ),
-        );
-        return;
-      }
-      emit(
-        CollectionState(
-          collection: detail.collection.copyWith(title: _seed.title),
-          tracks: detail.tracks,
-          description: detail.description,
           status: CollectionStatus.ready,
         ),
       );

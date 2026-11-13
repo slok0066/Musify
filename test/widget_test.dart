@@ -56,7 +56,7 @@ void main() {
   });
 
   testWidgets(
-      'TactileKeycap is tappable and TactileIconKeycap honours hapticOnPress',
+      'TactileKeycap and TactileIconKeycap respond to tap',
       (tester) async {
     var taps = 0;
 
@@ -143,41 +143,6 @@ void main() {
     expect(find.text('MINI PLAYER'), findsOneWidget,
         reason: 'the dock must survive a pushed detail screen');
     expect(find.text('NAV BAR'), findsOneWidget);
-  });
-
-  testWidgets('a root push is what used to bury the dock', (tester) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: buildMusifyTheme(SwissTokens.carbon),
-        home: Builder(
-          builder: (context) => Scaffold(
-            body: Center(
-              child: TactileKeycap(
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const Scaffold(
-                      body: Center(child: Text('DETAIL SCREEN')),
-                    ),
-                  ),
-                ),
-                child: const Text('OPEN ROOT'),
-              ),
-            ),
-            bottomNavigationBar: const Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [Text('MINI PLAYER'), Text('NAV BAR')],
-            ),
-          ),
-        ),
-      ),
-    );
-
-    await tester.tap(find.text('OPEN ROOT'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('DETAIL SCREEN'), findsOneWidget);
-    expect(find.text('MINI PLAYER'), findsNothing,
-        reason: 'this is the bug the nested chassis navigator fixes');
   });
 
   // Regression guard for the runtime-only crash
@@ -300,7 +265,7 @@ void main() {
     );
 
     expect(find.text('Created by a human being called Shlok'), findsOneWidget);
-    expect(find.text('@king_togetherness'), findsOneWidget);
+    expect(find.text('@shlok._.exe_'), findsOneWidget);
     expect(find.text('CONTINUE'), findsOneWidget);
 
     await tester.tap(find.text('CONTINUE'));

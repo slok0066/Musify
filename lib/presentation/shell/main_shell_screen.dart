@@ -14,6 +14,7 @@ import '../screens/library/library_screen.dart';
 import '../screens/onboarding/name_onboarding_screen.dart';
 import '../screens/search/search_screen.dart';
 import '../screens/settings/settings_screen.dart';
+import '../screens/update/update_screen.dart';
 import 'mini_player_bar.dart';
 
 /// The four-tab chassis.
@@ -106,6 +107,7 @@ class _ChassisState extends State<_Chassis> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    NameOnboardingScreen.getLocalMascotUri();
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkUpdateSilently();
@@ -135,7 +137,7 @@ class _ChassisState extends State<_Chassis> with WidgetsBindingObserver {
       final updateService = locator<UpdateService>();
       final info = await updateService.checkForUpdate();
       if (info != null && info.hasUpdate && mounted) {
-        UpdateService.showUpdateDialog(context, info);
+        showUpdateDialog(context, info);
       }
     } catch (_) {
       // Silent degradation

@@ -37,6 +37,9 @@ typedef StreamOpener = Future<StreamSource?> Function(Track track);
 /// The completed local file for a track, or `null` when it is not whole yet.
 typedef CompletedPathLookup = String? Function(Track track);
 
+/// Playback loop mode: off (play queue through), all (loop entire queue), or one (loop current track).
+enum RepeatMode { off, all, one }
+
 /// The Musify audio engine.
 ///
 /// This is the single source of truth for playback state. It owns the SoLoud
@@ -89,7 +92,6 @@ class PlaybackService {
 
   final SoLoud _soloud = SoLoud.instance;
 
-  // ------------------------------------------------------------------ state
 
   final ValueNotifier<Track?> currentTrack = ValueNotifier<Track?>(null);
   final ValueNotifier<bool> isPlaying = ValueNotifier<bool>(false);
@@ -123,7 +125,6 @@ class PlaybackService {
 
   Stream<Float32List> get fftStream => _fftController.stream;
 
-  // ----------------------------------------------------------------- engine
 
   AudioSource? _source;
   SoundHandle? _handle;
@@ -151,7 +152,6 @@ class PlaybackService {
   /// Track id -> already-staged local path, used for gapless transitions.
   final Map<String, String> _staged = {};
 
-  // ------------------------------------------------------- instant playback
   //
   // The progressive path: instead of downloading an MP4 and letting the engine
   // decode all of it before the first sample, Musify reads the MP4's sample
@@ -270,7 +270,6 @@ class PlaybackService {
       _soloud.isInitialized &&
       _soloud.getIsValidVoiceHandle(handle);
 
-  // ------------------------------------------------------------------- setup
 
   /// Boots the C++ engine. Time-boxed by the caller so a stuck audio device can
   /// never block the first frame.
@@ -315,7 +314,6 @@ class PlaybackService {
     }
   }
 
-  // ------------------------------------------------------------------- queue
 
   /// Starts [tracks] as the queue, at [startIndex].
   Future<void> playCollection(
@@ -473,7 +471,6 @@ class PlaybackService {
     _shuffleOrder = indices;
   }
 
-  // --------------------------------------------------------------- transport
 
   Future<void> togglePlayPause() async =>
       isPlaying.value ? await pause() : await resume();
@@ -567,10 +564,22 @@ class PlaybackService {
 
     final index = _streamIndex;
     if (index != null) {
-      final byte = index.adtsOffsetAtTime(target);
-      final window = index.windowAt(byte, _feedWindowBytes);
-      session.jumpTo(window.fileStart, window.fileEnd);
-      return;
+      if (index.sidxFragments != null && index.sidxFragments!.isNotEmpty) {
+        final targetUs = target.inMicroseconds;
+        final frag = index.sidxFragments!.firstWhere(
+          (f) => targetUs >= f.startUs && targetUs < (f.startUs + f.durationUs),
+          orElse: () => index.sidxFragments!.last,
+        );
+        session.jumpTo(frag.fileOffset, frag.fileOffset + _feedWindowBytes);
+        return;
+      }
+      if (!index.isFragmented ||
+          index.parsedAdtsBytes >= index.totalAdtsBytes) {
+        final byte = index.adtsOffsetAtTime(target);
+        final window = index.windowAt(byte, _feedWindowBytes);
+        session.jumpTo(window.fileStart, window.fileEnd);
+        return;
+      }
     }
     final total = session.total ?? 0;
     final totalMs = duration.value.inMilliseconds;
@@ -775,10 +784,22 @@ class PlaybackService {
       final Duration actualStartTime;
       final int remainingAudioBytes;
       if (index != null) {
+        if (index.isFragmented) {
+          await index.ensureCoveredTime(target, session);
+        }
         startByteOffset = index.adtsOffsetAtTime(target);
         actualStartTime = index.timeAtAdtsOffset(startByteOffset);
-        remainingAudioBytes = (index.totalAdtsBytes - startByteOffset)
-            .clamp(1024, index.totalAdtsBytes);
+        final durTotal = duration.value.inMicroseconds;
+        final durRem = durTotal - actualStartTime.inMicroseconds;
+        if (durTotal > 0 && durRem > 0) {
+          final frac = (durRem / durTotal).clamp(0.01, 1.0);
+          remainingAudioBytes = (index.totalAdtsBytes * frac)
+              .round()
+              .clamp(1024, index.totalAdtsBytes);
+        } else {
+          remainingAudioBytes = (index.totalAdtsBytes - startByteOffset)
+              .clamp(1024, index.totalAdtsBytes);
+        }
       } else {
         final total = session.total ?? 1;
         final totalMs = duration.value.inMilliseconds <= 0
@@ -1023,9 +1044,7 @@ class PlaybackService {
     if (pos >= 0) _shufflePosition = pos;
   }
 
-  // ------------------------------------------------------------------ cycle
 
-  // ------------------------------------------------------------ instant play
 
   /// Starts [track] from a live byte source: the container is indexed (MP4) or
   /// passed through raw (MP3/FLAC/Ogg/WAV), the engine gets a pull-buffer
@@ -1068,23 +1087,35 @@ class PlaybackService {
     // catalogue's older `_96.mp3` rungs, or any file already in the vault that
     // the engine decodes natively) needs no repacking at all: its bytes go to
     // the engine exactly as they arrive.
-    final headEnd = math.min(96 * 1024, total);
+    final headEnd = math.min(128 * 1024, total);
     var head = await session.read(0, headEnd);
-    var index =
-        head == null ? null : Mp4AacIndex.parse(head, fileLength: total);
+    var index = head == null
+        ? null
+        : Mp4AacIndex.parse(
+            head,
+            fileLength: total,
+            fallbackDuration: track.duration,
+          );
     if (index == null && head != null) {
-      // Faststart, but the sample table is bigger than the head read: its box
-      // header knows where it ends, so fetch just the rest and parse once more.
-      // A long table is a few hundred KB; anything past 4 MB is a broken box.
+      // Faststart, but the sample table or sidx is bigger than the head read:
+      // fetch up to the end of the box (plus first moof) and parse once more.
       final moovEnd = Mp4AacIndex.moovEndIn(head);
-      if (moovEnd != null &&
-          moovEnd > head.length &&
-          moovEnd <= 4 * 1024 * 1024 &&
-          moovEnd <= total) {
-        final grown = await session.read(0, moovEnd);
+      final sidxEnd = Mp4AacIndex.sidxEndIn(head);
+      final needed = math.max(
+        moovEnd ?? 0,
+        sidxEnd != null ? sidxEnd + 32 * 1024 : 0,
+      );
+      if (needed > head.length &&
+          needed <= 4 * 1024 * 1024 &&
+          needed <= total) {
+        final grown = await session.read(0, needed);
         if (grown != null) {
           head = grown;
-          index = Mp4AacIndex.parse(grown, fileLength: total);
+          index = Mp4AacIndex.parse(
+            grown,
+            fileLength: total,
+            fallbackDuration: track.duration,
+          );
         }
       }
     }
@@ -1092,7 +1123,11 @@ class PlaybackService {
       // `moov` written last: the sample table is in the tail instead.
       final tail = await session.read(math.max(0, total - 256 * 1024), total);
       if (tail != null) {
-        index = Mp4AacIndex.parseAnywhere(tail, fileLength: total);
+        index = Mp4AacIndex.parseAnywhere(
+          tail,
+          fileLength: total,
+          fallbackDuration: track.duration,
+        );
       }
     }
     final raw = index == null && head != null && _isRawDecodable(head);
@@ -1283,6 +1318,14 @@ class PlaybackService {
       // First window of a fresh window (start or seek): the small read, so the
       // wait for the first sound stays short — see [_firstFeedBytes].
       final windowBytes = _streamStarted ? _feedWindowBytes : _firstFeedBytes;
+      if (index.isFragmented) {
+        await index.ensureCovered(targetAdtsOffset + _firstFeedBytes, session);
+        if (_disposed || !_streaming || epoch != _streamEpoch) return;
+        if (targetAdtsOffset >= index.parsedAdtsBytes) {
+          _onFeedFailed(targetAdtsOffset, 'buffering fragments');
+          return;
+        }
+      }
       final window = index.windowAt(targetAdtsOffset, windowBytes);
       // Mapped against the window that was committed *now*: a seek during the
       // read must not re-base this chunk into the new stream.
@@ -1445,12 +1488,16 @@ class PlaybackService {
 
       final source = await _resolveFor(track);
       if (source == null) {
-        errorText.value = 'TRACK UNAVAILABLE — SKIPPING';
+        final youTube = track.isYouTube;
+        errorText.value = youTube
+            ? 'PLAYBACK ERROR'
+            : 'TRACK UNAVAILABLE — SKIPPING';
         isBuffering.value = false;
         _bump();
         _switching = false;
-        // A dead catalogue entry must not stall the queue.
-        await _autoSkipAfterFailure();
+        // A dead catalogue entry must not stall the queue. A YouTube failure
+        // stays on screen so the test can see which source broke.
+        if (!youTube) await _autoSkipAfterFailure();
         return;
       }
 
@@ -1476,7 +1523,7 @@ class PlaybackService {
 
       if (!_live(handle)) {
         // Non-blocking playback failure: reported, not thrown.
-        errorText.value = 'PLAYBACK FAILED';
+        errorText.value = track.isYouTube ? 'PLAYBACK ERROR' : 'PLAYBACK FAILED';
         isBuffering.value = false;
         _bump();
         return;
@@ -1666,7 +1713,6 @@ class PlaybackService {
     _bump();
   }
 
-  // ------------------------------------------------------------ position loop
 
   void _startPositionTimer() {
     _positionTimer?.cancel();
@@ -1854,7 +1900,6 @@ class PlaybackService {
     }
   }
 
-  // -------------------------------------------------------------- crossfade
 
   void _maybeCrossfade(Duration current) {
     final fadeSeconds = _settings.value.crossfadeSeconds;
@@ -1989,7 +2034,6 @@ class PlaybackService {
     }
   }
 
-  // ---------------------------------------------------------------- 8D audio
 
   /// The 1-tap hardware toggle.
   Future<void> set8DEnabled(bool enabled) async {
@@ -2194,7 +2238,6 @@ class PlaybackService {
     }
   }
 
-  // -------------------------------------------------------------- equaliser
 
   /// Drives SoLoud's parametric EQ: one band per preset slider.
   void _applyEqualizer() {
@@ -2260,7 +2303,6 @@ class PlaybackService {
         .update(_settings.value.copyWith(bassBoost: value.clamp(0.0, 4.0)));
   }
 
-  // ------------------------------------------------------------- visualiser
 
   /// Enables SoLoud's FFT feed only while something is actually watching it.
   Future<void> setVisualizerActive(bool active) async {
@@ -2288,7 +2330,6 @@ class PlaybackService {
     }
   }
 
-  // ------------------------------------------------------------- sleep timer
 
   /// `null` cancels. The fade-out is left to the engine so it is sample-accurate.
   void setSleepTimer(Duration? duration) {
@@ -2325,7 +2366,6 @@ class PlaybackService {
     await pause();
   }
 
-  // ------------------------------------------------------------------ ducking
 
   /// Called by the OS integration layer when another app takes audio focus.
   void duck() {
@@ -2344,7 +2384,6 @@ class PlaybackService {
     } catch (_) {}
   }
 
-  // ------------------------------------------------------------------ volume
 
   void setVolume(double value) {
     if (!_engineReady) return;
@@ -2353,7 +2392,6 @@ class PlaybackService {
     } catch (_) {}
   }
 
-  // ------------------------------------------------------------------ toggles
 
   void setShuffle(bool enabled) {
     shuffleEnabled.value = enabled;
@@ -2377,7 +2415,6 @@ class PlaybackService {
 
   void _bump() => stateRevision.value++;
 
-  // -------------------------------------------------------------- teardown
 
   Future<void> disposeEngine() async {
     _disposed = true;

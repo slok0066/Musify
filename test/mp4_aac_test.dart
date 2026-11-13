@@ -11,7 +11,6 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:musify/services/mp4_aac.dart';
-import 'package:musify/services/media_cache.dart';
 
 // ------------------------------------------------------------------ fixture
 //
@@ -138,6 +137,62 @@ Uint8List _moov() {
   final mdia = _box('mdia', [...hdlr, ...minf]);
   final trak = _box('trak', mdia);
   return _box('moov', trak);
+}
+
+Uint8List _moovFragmented() {
+  final hdlr = _full('hdlr', [
+    ..._u32(0),
+    ..._ascii('soun'),
+    ...List.filled(12, 0),
+    ..._ascii('Musify'),
+  ]);
+  final stts = _full('stts', _u32(0));
+  final stsc = _full('stsc', _u32(0));
+  final stsz = _full('stsz', [..._u32(0), ..._u32(0)]);
+  final stco = _full('stco', _u32(0));
+  final stbl = _box('stbl', [
+    ..._stsd(),
+    ...stts,
+    ...stsc,
+    ...stsz,
+    ...stco,
+  ]);
+  final minf = _box('minf', stbl);
+  final mdia = _box('mdia', [...hdlr, ...minf]);
+  final trak = _box('trak', mdia);
+  final mvex = _box('mvex', _box('trex', List.filled(24, 0)));
+  return _box('moov', [...trak, ...mvex]);
+}
+
+Uint8List _moofBox({
+  required int sequenceNumber,
+  required List<int> sampleSizes,
+}) {
+  final mfhd = _full('mfhd', _u32(sequenceNumber));
+  final tfhd = _box('tfhd', [0, 0x02, 0x00, 0x00, ..._u32(1)]);
+  final dummyTrun = _box('trun', [
+    0,
+    0x00,
+    0x02,
+    0x01,
+    ..._u32(sampleSizes.length),
+    ..._u32(0),
+    for (final s in sampleSizes) ..._u32(s),
+  ]);
+  final dummyMoof =
+      _box('moof', [...mfhd, ..._box('traf', [...tfhd, ...dummyTrun])]);
+  final dataOffset = dummyMoof.length + 8;
+  final trun = _box('trun', [
+    0,
+    0x00,
+    0x02,
+    0x01,
+    ..._u32(sampleSizes.length),
+    ..._u32(dataOffset),
+    for (final s in sampleSizes) ..._u32(s),
+  ]);
+  final traf = _box('traf', [...tfhd, ...trun]);
+  return _box('moof', [...mfhd, ...traf]);
 }
 
 Uint8List _mp4Head() {
@@ -354,49 +409,44 @@ void main() {
       expect(at, adts.length, reason: 'no slack, no overlap');
       expect(frames, _sampleCount);
     });
-  });
 
-  group('ByteCoverage', () {
-    test('tracks holes, merges neighbours and knows when the file is whole',
-        () {
-      final coverage = ByteCoverage();
-      coverage.add(0, 100);
-      expect(coverage.bytes, 100);
-      expect(coverage.covers(0, 100), isTrue);
-      expect(coverage.covers(0, 101), isFalse);
-      expect(coverage.firstGap(200), 100);
-      expect(coverage.isComplete(200), isFalse);
+    test('parses fragmented MP4 with moof boxes and generates ADTS frames', () {
+      final ftyp =
+          _box('ftyp', [..._ascii('iso4'), ..._u32(0), ..._ascii('isom')]);
+      final moov = _moovFragmented();
+      final moof1 = _moofBox(sequenceNumber: 1, sampleSizes: [120, 140]);
+      final mdat1 = _box('mdat', [
+        ...List.filled(120, 0xAA),
+        ...List.filled(140, 0xBB),
+      ]);
+      final fileData =
+          Uint8List.fromList([...ftyp, ...moov, ...moof1, ...mdat1]);
 
-      // A seek-forward leaves a hole behind it.
-      coverage.add(150, 200);
-      expect(coverage.bytes, 150);
-      expect(coverage.firstGap(200), 100);
-      expect(coverage.runAt(120), isNull);
-      expect(coverage.runAt(160), (150, 200));
+      final index = Mp4AacIndex.parse(
+        fileData,
+        fileLength: fileData.length,
+        fallbackDuration: const Duration(seconds: 180),
+      );
 
-      // Filling the hole must merge everything into one run.
-      coverage.add(100, 150);
-      expect(coverage.ranges, [(0, 200)]);
-      expect(coverage.firstGap(200), isNull);
-      expect(coverage.isComplete(200), isTrue);
-      expect(coverage.bytes, 200);
-    });
+      expect(index, isNotNull);
+      expect(index!.isFragmented, isTrue);
+      expect(index.sampleCount, 2);
+      expect(index.sampleRate, 44100);
+      expect(index.channels, 2);
 
-    test('absorbs an overlapping range without double counting', () {
-      final coverage = ByteCoverage()..add(0, 10)..add(20, 30);
-      coverage.add(5, 25);
-      expect(coverage.ranges, [(0, 30)]);
-      expect(coverage.bytes, 30);
-      coverage.add(30, 40);
-      expect(coverage.ranges, [(0, 40)], reason: 'adjacent ranges merge too');
-      expect(coverage.isComplete(40), isTrue);
-    });
+      final window = index.windowAt(0, 16);
+      expect(window.firstSample, 0);
+      expect(window.lastSample, 0);
+      expect(window.fileStart, ftyp.length + moov.length + moof1.length + 8);
+      expect(window.fileEnd, window.fileStart + 120);
 
-    test('an empty range changes nothing', () {
-      final coverage = ByteCoverage()..add(10, 10);
-      expect(coverage.ranges, isEmpty);
-      expect(coverage.firstGap(10), 0);
-      expect(coverage.isComplete(0), isFalse);
+      final sampleBytes =
+          Uint8List.sublistView(fileData, window.fileStart, window.fileEnd);
+      final adts = index.assemble(window, sampleBytes);
+      expect(adts.length, 120 + 7);
+      expect(adts[0], 0xFF);
+      expect(adts[1], 0xF1);
+      expect(adts.sublist(7), List.filled(120, 0xAA));
     });
   });
 }

@@ -169,45 +169,7 @@ class _AddToPlaylistState extends State<_AddToPlaylist> {
   }
 }
 
-class _Entry extends StatelessWidget {
-  const _Entry({required this.icon, required this.label, required this.onTap});
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = SwissTokens.of(context);
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () {
-          Haptics.tap();
-          onTap();
-        },
-        highlightColor: Colors.transparent,
-        splashColor: Colors.transparent,
-        child: Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: SwissGrid.lg,
-            vertical: SwissGrid.md + 2,
-          ),
-          decoration: BoxDecoration(
-            border: Border(bottom: BorderSide(color: t.hairline, width: 1)),
-          ),
-          child: Row(
-            children: [
-              Icon(icon, size: 17, color: t.accent),
-              const SizedBox(width: SwissGrid.md),
-              Text(label, style: SwissType.label.copyWith(color: t.ink)),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
+typedef _Entry = SwissSheetActionTile;
 
 class _PlaylistRow extends StatelessWidget {
   const _PlaylistRow({required this.playlist, required this.onTap});

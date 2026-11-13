@@ -102,7 +102,7 @@ class _LyricsSheetState extends State<_LyricsSheet> {
     final lyrics = _lyrics;
 
     return MusifySheetShell(
-      maxHeightFactor: 0.85,
+      maxHeightFactor: 0.90,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -113,8 +113,8 @@ class _LyricsSheetState extends State<_LyricsSheet> {
                 : lyrics == null
                     ? 'NO MATCH IN THE LRCLIB INDEX'
                     : lyrics.synced
-                        ? 'SYNCED // LRCLIB'
-                        : 'PLAIN TEXT // LRCLIB',
+                        ? '${widget.track.title.toUpperCase()} // SYNCED'
+                        : '${widget.track.title.toUpperCase()} // PLAIN TEXT',
             trailing: TactileIconKeycap(
               icon: Icons.close,
               size: 30,
@@ -128,9 +128,9 @@ class _LyricsSheetState extends State<_LyricsSheet> {
                 ? ListView(
                     padding: const EdgeInsets.all(SwissGrid.lg),
                     children: [
-                      for (var i = 0; i < 12; i++) ...[
-                        SwissSkeleton(height: 13, width: 180 + (i % 4) * 60),
-                        const SizedBox(height: SwissGrid.md),
+                      for (var i = 0; i < 10; i++) ...[
+                        SwissSkeleton(height: 20, width: 180 + (i % 4) * 60),
+                        const SizedBox(height: SwissGrid.lg),
                       ],
                     ],
                   )
@@ -147,7 +147,8 @@ class _LyricsSheetState extends State<_LyricsSheet> {
                         itemCount: lyrics.lines.length,
                         itemBuilder: (context, i) {
                           final line = lyrics.lines[i];
-                          final active = i == _active;
+                          final active = lyrics.synced && i == _active;
+                          final isPast = lyrics.synced && _active >= 0 && i < _active;
                           return GestureDetector(
                             key: _lineKeys.length > i ? _lineKeys[i] : null,
                             behavior: HitTestBehavior.opaque,
@@ -155,27 +156,45 @@ class _LyricsSheetState extends State<_LyricsSheet> {
                                 ? null
                                 : () => locator<PlaybackService>().seek(line.time!),
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 7),
+                              padding: const EdgeInsets.symmetric(vertical: 10),
                               child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  if (active)
-                                    Container(
-                                      width: 2,
-                                      height: 18,
-                                      margin: const EdgeInsets.only(top: 2, right: SwissGrid.sm),
-                                      color: t.accent,
+                                  if (lyrics.synced)
+                                    AnimatedContainer(
+                                      duration: const Duration(milliseconds: 220),
+                                      curve: Curves.easeOutCubic,
+                                      width: active ? 4 : 0,
+                                      height: active ? 24 : 0,
+                                      margin: EdgeInsets.only(top: 3, right: active ? SwissGrid.sm : 0),
+                                      decoration: BoxDecoration(
+                                        color: t.accent,
+                                        borderRadius: BorderRadius.circular(2),
+                                      ),
                                     ),
                                   Expanded(
-                                    child: Text(
-                                      line.text.isEmpty ? '…' : line.text,
-                                      style: SwissType.bodySm.copyWith(
-                                        color: active
-                                            ? t.accent
-                                            : (i < _active ? t.inkFaint : t.ink),
-                                        fontWeight: active ? FontWeight.w700 : FontWeight.w400,
-                                        fontSize: active ? 14.5 : 13.5,
-                                        height: 1.35,
+                                    child: AnimatedDefaultTextStyle(
+                                      duration: const Duration(milliseconds: 220),
+                                      curve: Curves.easeOutCubic,
+                                      style: SwissType.displaySm.copyWith(
+                                        color: !lyrics.synced
+                                            ? t.ink
+                                            : active
+                                                ? t.accent
+                                                : (isPast ? t.inkFaint : t.inkMuted),
+                                        fontWeight: active
+                                            ? FontWeight.w800
+                                            : (lyrics.synced ? FontWeight.w600 : FontWeight.w500),
+                                        fontSize: !lyrics.synced
+                                            ? 18
+                                            : active
+                                                ? 22
+                                                : 17,
+                                        height: active ? 1.35 : 1.45,
+                                        letterSpacing: active ? -0.3 : -0.2,
+                                      ),
+                                      child: Text(
+                                        line.text.isEmpty ? '…' : line.text,
                                       ),
                                     ),
                                   ),

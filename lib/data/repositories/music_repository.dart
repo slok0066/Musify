@@ -1,13 +1,15 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 
-import '../../core/utils/formatters.dart';
 import '../../services/media_cache.dart';
 import '../../services/network_monitor.dart';
 import '../../services/player/playback_service.dart';
 import '../../services/settings_service.dart';
+import '../../services/yt_first/yt_first_config.dart';
+import '../../services/yt_first/youtube_service.dart';
 import '../datasources/artwork_client.dart';
 import '../datasources/jiosaavn_client.dart';
 import '../datasources/lyrics_client.dart';
@@ -67,16 +69,6 @@ class SearchResults {
   int get total => songs.length + albums.length + artists.length + playlists.length;
 }
 
-/// The library-backed facets Home needs when it is offline.
-class OfflineFallback {
-  const OfflineFallback({this.downloads = const [], this.history = const []});
-
-  final List<Track> downloads;
-  final List<Track> history;
-
-  bool get isEmpty => downloads.isEmpty && history.isEmpty;
-}
-
 /// Orchestrates every remote catalogue and local byte in Musify.
 ///
 /// · **Playback resolution waterfall** — offline file → stream cache →
@@ -107,7 +99,13 @@ class MusicRepository {
   final SettingsService _settings;
   final NetworkMonitor _network;
 
-  // ------------------------------------------------------------ playability
+  /// Constructed on first use: with YouTube-first off there is no client,
+  /// no socket and no YouTube call.
+  late final YoutubeService _youtube = YoutubeService();
+
+  /// Effective switch: the const master switch and the persisted setting.
+  bool get _ytFirst =>
+      YtFirstConfig.enabled && _settings.value.ytFirstEnabled;
 
   /// The quality tier to request right now: the Wi-Fi tier on an unmetered
   /// transport, the mobile tier otherwise.
@@ -137,6 +135,26 @@ class MusicRepository {
       // than hanging on a DNS timeout.
       final cachedOnly = await _cachedOnlySource(track);
       return cachedOnly;
+    }
+
+    // YouTube resolves a fresh URL on every tap, never from a cache. A failed
+    // stream retries once inside the service, then we match the same song on
+    // Saavn. Prefetch is skipped: the next tap must resolve fresh.
+    if (track.isYouTube) {
+      if (prefetch) return null;
+      if (_ytFirst) {
+        final staged = await _youtube.stage(track, onProgress: onProgress);
+        if (staged != null) {
+          return PlayableSource(
+            path: staged,
+            isLocalFile: true,
+            bitrate: track.bitrate,
+          );
+        }
+      }
+      final fallback = await _saavnMatchFor(track);
+      if (fallback == null) return null;
+      return resolvePlayable(fallback, onProgress: onProgress);
     }
 
     // 2. Walk the renditions from best to worst.
@@ -205,6 +223,36 @@ class MusicRepository {
   /// Returns `null` when nothing can be streamed; the caller then falls back to
   /// [resolvePlayable]'s staged download.
   Future<StreamSource?> openStream(Track track) async {
+    if (track.isYouTube) {
+      if (!_ytFirst) return null;
+      final staged = await _youtube.stagedPath(track);
+      if (staged != null) {
+        final session = StreamSession.overFile(staged);
+        if (session != null) {
+          return StreamSource(session: session, url: '', bitrate: 128);
+        }
+      }
+      await for (final candidate in _youtube.resolveAudioCandidates(track)) {
+        final fileName = 'yt_${track.videoId}_${candidate.itag}.m4a';
+        final session = await _cache.openStream(
+          url: candidate.url,
+          fileName: fileName,
+          headers: {'user-agent': candidate.userAgent},
+        );
+        if (session == null) continue;
+        final total = session.total;
+        if (total == null || total < 64 * 1024) {
+          session.release();
+          continue;
+        }
+        return StreamSource(
+          session: session,
+          url: candidate.url,
+          bitrate: candidate.bitrateKbps,
+        );
+      }
+      return null;
+    }
     final loopback = await _completeSession(track);
     if (loopback != null) return loopback;
 
@@ -273,6 +321,7 @@ class MusicRepository {
   void prefetchTracks(List<Track> tracks, {int count = 3}) {
     if (tracks.isEmpty || !_network.isOnline.value) return;
     for (final track in tracks.take(count)) {
+      if (track.isYouTube) continue;
       if (_existingPath(track.localPath) != null) continue;
       unawaited(
         () async {
@@ -302,7 +351,6 @@ class MusicRepository {
     return File(path).existsSync() ? path : null;
   }
 
-  // ------------------------------------------------------------------- home
 
   Future<HomeFeed> loadHome({bool refresh = false}) async {
     if (!_network.isOnline.value) {
@@ -327,18 +375,32 @@ class MusicRepository {
   }
 
   Future<List<Track>> _fetchFeaturedHits(LaunchPayload payload) async {
-    final hits = <Track>[];
+    final hindiHits = <Track>[];
+    final englishHits = <Track>[];
     final seen = <String>{};
 
-    void addTrack(Track? t) {
+    void addTrack(Track? t, {required bool isEnglish}) {
       if (t == null || t.id.isEmpty) return;
+      if (t.isYouTube ||
+          t.source != TrackSource.saavn ||
+          t.id.startsWith('yt:') ||
+          t.imageUrl.contains('ytimg')) {
+        return;
+      }
       if (seen.add(t.dedupeKey)) {
-        hits.add(t);
+        if (isEnglish) {
+          englishHits.add(t);
+        } else {
+          hindiHits.add(t);
+        }
       }
     }
 
     try {
-      // 1. Fetch tracks from the top trending playlists/charts
+      // 1. Kick off top English hits concurrently for snappy loading
+      final englishFuture = _saavn.searchSongs('english pop hits', limit: 15);
+
+      // 2. Fetch tracks from the top trending playlists/charts (Hindi/Indian)
       final collectionsToExamine = <Collection>[];
       for (final item in payload.trending) {
         if (item.isCollection && item.collection != null && collectionsToExamine.length < 2) {
@@ -356,33 +418,64 @@ class MusicRepository {
           final detail = await _saavn.playlistDetail(col, maxTracks: 15);
           if (detail != null && detail.tracks.isNotEmpty) {
             for (final track in detail.tracks) {
-              addTrack(track);
+              final isEng = track.language?.toLowerCase() == 'english';
+              addTrack(track, isEnglish: isEng);
             }
           }
         } catch (_) {}
-        if (hits.length >= 20) break;
+        if (hindiHits.length >= 15) break;
       }
 
-      // 2. Query latest trending songs directly from search if still needed
-      if (hits.length < 15) {
-        final queryResults = await _saavn.searchSongs('trending hits', limit: 25);
+      // Query latest trending songs directly from search if still needed
+      if (hindiHits.length < 10) {
+        final queryResults = await _saavn.searchSongs('trending hits', limit: 20);
         for (final track in queryResults) {
-          addTrack(track);
+          final isEng = track.language?.toLowerCase() == 'english';
+          addTrack(track, isEnglish: isEng);
         }
       }
 
-      // 3. Fallback: Include topSearches
-      if (hits.length < 15) {
+      // 3. Await English hits and add them
+      try {
+        final engResults = await englishFuture;
+        for (final track in engResults) {
+          addTrack(track, isEnglish: true);
+        }
+        if (englishHits.length < 5) {
+          final moreEng = await _saavn.searchSongs('top english hits', limit: 10);
+          for (final track in moreEng) {
+            addTrack(track, isEnglish: true);
+          }
+        }
+      } catch (_) {}
+
+      // 4. Fallback: Include topSearches
+      if (hindiHits.isEmpty && englishHits.isEmpty) {
         final top = await _saavn.fetchTopSearches();
         for (final track in top) {
-          addTrack(track);
+          final isEng = track.language?.toLowerCase() == 'english';
+          addTrack(track, isEnglish: isEng);
         }
       }
     } catch (e) {
       debugPrint('Failed to fetch featured hits: $e');
     }
 
-    return hits;
+    // Interleave Hindi/Indian hits with English hits (approx 2:1 ratio for a balanced blend)
+    final combined = <Track>[];
+    int hIndex = 0;
+    int eIndex = 0;
+
+    while (hIndex < hindiHits.length || eIndex < englishHits.length) {
+      for (int i = 0; i < 2 && hIndex < hindiHits.length; i++) {
+        combined.add(hindiHits[hIndex++]);
+      }
+      if (eIndex < englishHits.length) {
+        combined.add(englishHits[eIndex++]);
+      }
+    }
+
+    return combined.take(20).toList();
   }
 
   /// The eight curated genre tiles, with a hard-coded fallback so Search is
@@ -503,9 +596,32 @@ class MusicRepository {
     });
   }
 
-  /// "Made For You" mixes derived from what this listener actually plays.
-  Future<List<Collection>> dailyMixes(List<Track> history) async {
-    if (history.isEmpty) {
+  /// "Made For You" mixes derived from what this listener plays and searches.
+  Future<List<Collection>> dailyMixes(
+    List<Track> history, {
+    List<String> recentSearches = const [],
+  }) async {
+    final counts = <String, int>{};
+    for (final track in history) {
+      final artist = track.artist.trim();
+      if (artist.isEmpty || artist.toLowerCase() == 'unknown') continue;
+      counts[artist] = (counts[artist] ?? 0) + 1;
+    }
+
+    final seeds = <String>[];
+    if (counts.isNotEmpty) {
+      final topArtists = counts.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
+      seeds.addAll(topArtists.take(4).map((e) => e.key));
+    } else {
+      for (final s in recentSearches) {
+        final clean = s.trim();
+        if (clean.isNotEmpty && !seeds.contains(clean)) seeds.add(clean);
+        if (seeds.length >= 4) break;
+      }
+    }
+
+    if (seeds.isEmpty) {
       final payload = await _saavn.fetchLaunch();
       return payload.playlists
           .where((r) => r.isCollection)
@@ -514,25 +630,14 @@ class MusicRepository {
           .toList();
     }
 
-    // Rank artists by how often they appear in the recent history.
-    final counts = <String, int>{};
-    for (final track in history) {
-      final artist = track.artist.trim();
-      if (artist.isEmpty || artist.toLowerCase() == 'unknown') continue;
-      counts[artist] = (counts[artist] ?? 0) + 1;
-    }
-
-    final topArtists = counts.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-
     final mixes = <Collection>[];
-    for (final entry in topArtists.take(4)) {
-      final playlists = await _saavn.searchPlaylists(entry.key, limit: 4);
+    for (final seed in seeds) {
+      final playlists = await _saavn.searchPlaylists(seed, limit: 4);
       if (playlists.isEmpty) continue;
       mixes.add(
         playlists.first.copyWith(
           kind: CollectionKind.mix,
-          subtitle: 'MADE FOR YOU · ${entry.key.toUpperCase()}',
+          subtitle: 'MADE FOR YOU · ${seed.toUpperCase()}',
         ),
       );
     }
@@ -548,7 +653,72 @@ class MusicRepository {
     return mixes;
   }
 
-  // ----------------------------------------------------------------- search
+  /// Personalized suggestions for Home, combining YouTube and Saavn tracks
+  /// based on user's recent search queries (falling back to listening history).
+  Future<List<Track>> searchSuggestions(
+    List<String> recentSearches, {
+    List<Track> history = const [],
+  }) async {
+    final seeds = <String>[];
+    for (final s in recentSearches) {
+      final clean = s.trim();
+      if (clean.length >= 2 && !seeds.contains(clean)) seeds.add(clean);
+      if (seeds.length >= 3) break;
+    }
+
+    if (seeds.isEmpty) {
+      for (final t in history) {
+        final artist = t.artist.split(',').first.trim();
+        if (artist.isNotEmpty &&
+            artist.toLowerCase() != 'unknown' &&
+            !seeds.contains(artist)) {
+          seeds.add(artist);
+        }
+        if (seeds.length >= 3) break;
+      }
+    }
+
+    if (seeds.isEmpty) {
+      seeds.addAll(['Trending Songs', 'Top Hits']);
+    }
+
+    final allSaavn = <Track>[];
+    final allYt = <Track>[];
+    final queryFutures = <Future<void>>[];
+
+    for (final seed in seeds) {
+      queryFutures.add(() async {
+        try {
+          final res = await _saavn.searchSongs(seed, limit: 12);
+          allSaavn.addAll(res);
+        } catch (_) {}
+      }());
+
+      if (_ytFirst) {
+        queryFutures.add(() async {
+          try {
+            final res = await _youtube.search(seed).timeout(
+                  const Duration(seconds: 4),
+                  onTimeout: () => const <Track>[],
+                );
+            allYt.addAll(res);
+          } catch (_) {}
+        }());
+      }
+    }
+
+    await Future.wait(queryFutures);
+
+    final mixed = Track.mixAndDedupe(allSaavn, allYt, limit: 25);
+    final deduped = Track.dedupe(mixed);
+    for (final track in deduped.take(2)) {
+      if (track.isYouTube) {
+        _youtube.prefetchCandidate(track);
+        break;
+      }
+    }
+    return deduped;
+  }
 
   Future<SearchResults> search(String query) async {
     final trimmed = query.trim();
@@ -559,26 +729,79 @@ class MusicRepository {
       return SearchResults(query: trimmed);
     }
 
+    final ytFuture = _ytFirst
+        ? _youtube.search(trimmed).timeout(
+              const Duration(seconds: 4),
+              onTimeout: () => const <Track>[],
+            )
+        : Future.value(const <Track>[]);
+
+    final saavnFuture = _saavn.searchSongs(trimmed, limit: 30);
+    final albumsFuture = _saavn.searchAlbums(trimmed, limit: 12);
+    final artistsFuture = _saavn.searchArtists(trimmed, limit: 12);
+    final playlistsFuture = _saavn.searchPlaylists(trimmed, limit: 12);
+
     final results = await Future.wait([
-      _saavn.searchSongs(trimmed, limit: 30),
-      _saavn.searchAlbums(trimmed, limit: 12),
-      _saavn.searchArtists(trimmed, limit: 12),
-      _saavn.searchPlaylists(trimmed, limit: 12),
+      ytFuture,
+      saavnFuture,
+      albumsFuture,
+      artistsFuture,
+      playlistsFuture,
     ]);
+
+    final ytSongs = results[0] as List<Track>;
+    final saavnSongs = results[1] as List<Track>;
+    final albums = results[2] as List<Collection>;
+    final artists = results[3] as List<Collection>;
+    final playlists = results[4] as List<Collection>;
+
+    final mixedSongs = Track.mixAndDedupe(
+      saavnSongs,
+      ytSongs,
+      limit: 40,
+    );
+
+    // Warm up the top YouTube track in the background for instant playback
+    for (final track in mixedSongs.take(2)) {
+      if (track.isYouTube) {
+        _youtube.prefetchCandidate(track);
+        break;
+      }
+    }
 
     return SearchResults(
       query: trimmed,
-      songs: Track.dedupe(results[0] as List<Track>),
-      albums: results[1] as List<Collection>,
-      artists: results[2] as List<Collection>,
-      playlists: results[3] as List<Collection>,
+      songs: mixedSongs,
+      albums: albums,
+      artists: artists,
+      playlists: playlists,
     );
   }
 
   Future<List<String>> suggest(String query) => _saavn.suggest(query);
 
-  Future<List<Track>> searchSongs(String query, {int page = 1}) =>
-      _saavn.searchSongs(query, page: page, limit: 40);
+  Future<List<Track>> searchSongs(String query, {int page = 1}) async {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return const [];
+
+    final ytFuture = _ytFirst
+        ? _youtube.search(trimmed, page: page).timeout(
+              const Duration(seconds: 4),
+              onTimeout: () => const <Track>[],
+            )
+        : Future.value(const <Track>[]);
+
+    final saavnFuture = _saavn.searchSongs(trimmed, page: page, limit: 30);
+
+    final results = await Future.wait([ytFuture, saavnFuture]);
+    final ytSongs = results[0];
+    final saavnSongs = results[1];
+
+    if (ytSongs.isEmpty) return saavnSongs;
+    if (saavnSongs.isEmpty) return ytSongs;
+
+    return Track.mixAndDedupe(saavnSongs, ytSongs, limit: 40);
+  }
 
   /// Voice-free convenience: songs matching a mood keyword for Home's quick
   /// filters.
@@ -587,12 +810,16 @@ class MusicRepository {
     return Track.dedupe(songs);
   }
 
-  // ----------------------------------------------------------------- detail
 
   Future<CollectionDetail?> loadCollection(Collection collection) async {
+    if (collection.id == '__weekly_mix__') {
+      return _loadWeeklyMix(collection);
+    }
     switch (collection.kind) {
       case CollectionKind.album:
-        return _saavn.albumDetail(collection);
+        final album = await _saavn.albumDetail(collection);
+        if (album != null && album.tracks.isNotEmpty) return album;
+        return _saavn.playlistDetail(collection);
       case CollectionKind.artist:
         return _saavn.artistDetail(collection);
       case CollectionKind.genre:
@@ -601,18 +828,67 @@ class MusicRepository {
       case CollectionKind.chart:
       case CollectionKind.mix:
       case CollectionKind.system:
-        return _saavn.playlistDetail(collection);
+        final playlist = await _saavn.playlistDetail(collection);
+        if (playlist != null && playlist.tracks.isNotEmpty) return playlist;
+        final album = await _saavn.albumDetail(collection);
+        if (album != null && album.tracks.isNotEmpty) return album;
+        return _saavn.genreDetail(collection);
     }
   }
 
-  Future<CollectionDetail?> loadPlainPlaylist(String id, {String? title}) async {
-    return _saavn.playlistDetail(
-      Collection(
-        id: id,
-        title: title ?? 'PLAYLIST',
-        kind: CollectionKind.playlist,
-      ),
-    );
+  /// Curates an authentic "Weekly Mix" combining English international chartbusters
+  /// and trending all-music hits in a randomized, diverse pool.
+  Future<CollectionDetail?> _loadWeeklyMix(Collection collection) async {
+    try {
+      final results = await Future.wait([
+        _saavn.playlistDetail(
+          const Collection(
+            id: '1134595537',
+            kind: CollectionKind.playlist,
+            title: 'International Hits',
+          ),
+          maxTracks: 50,
+        ),
+        _saavn.playlistDetail(
+          const Collection(
+            id: '1134548194',
+            kind: CollectionKind.playlist,
+            title: 'Top Hits',
+          ),
+          maxTracks: 50,
+        ),
+      ]);
+
+      final englishTracks = results[0]?.tracks ?? const <Track>[];
+      final allTracks = results[1]?.tracks ?? const <Track>[];
+
+      final mixed = <Track>[];
+      final maxLen = englishTracks.length > allTracks.length
+          ? englishTracks.length
+          : allTracks.length;
+      for (var i = 0; i < maxLen; i++) {
+        if (i < englishTracks.length) mixed.add(englishTracks[i]);
+        if (i < allTracks.length) mixed.add(allTracks[i]);
+      }
+
+      final deduped = Track.dedupe(mixed);
+      if (deduped.isNotEmpty) {
+        deduped.shuffle(Random());
+        return CollectionDetail(
+          collection: collection.copyWith(
+            title: 'Weekly Mix',
+            subtitle: 'ENGLISH & ALL MUSIC // RANDOM MIX',
+            songCount: deduped.length,
+          ),
+          tracks: deduped,
+          description:
+              'A diverse weekly mix blending English international chartbusters with trending all-music hits.',
+        );
+      }
+    } catch (e) {
+      debugPrint('Weekly mix load error: $e');
+    }
+    return _saavn.genreDetail(collection);
   }
 
   /// Loads a chart/playlist that is useful for the genre detail screen even
@@ -624,7 +900,6 @@ class MusicRepository {
     });
   }
 
-  // ---------------------------------------------------------------- artwork
 
   /// A 1000 px cover for a single track, used on the Now Playing screen where
   /// the extra resolution is actually visible.
@@ -643,11 +918,9 @@ class MusicRepository {
     return art?.url;
   }
 
-  // ---------------------------------------------------------------- lyrics
 
   Future<Lyrics?> lyricsFor(Track track) => _lyrics.fetch(track);
 
-  // -------------------------------------------------------------- downloads
 
   /// Writes a permanent offline copy and returns the updated track.
   Future<Track?> downloadTrack(
@@ -701,17 +974,21 @@ class MusicRepository {
 
   Future<int> deleteAllDownloads() => _cache.deleteAllDownloads();
 
-  /// Small helper the UI uses for the "PLAYING FROM" label.
-  static String sourceLabelFor(DateTime now) => 'MUSIFY';
-
-  /// A friendly, non-technical reason string for a failed resolution.
-  String unavailableReason(Track track) {
-    if (!_network.isOnline.value) return 'OFFLINE — NOT DOWNLOADED';
-    if (!track.has320) return 'NO PLAYABLE RENDITION';
-    return 'TRACK UNAVAILABLE';
+  /// Finds the same recording on Saavn after a YouTube playback failure.
+  Future<Track?> _saavnMatchFor(Track track) async {
+    try {
+      final matches = await _saavn.searchSongs(
+        '${track.title} ${track.artist}'.trim(),
+        limit: 8,
+      );
+      if (matches.isEmpty) return null;
+      for (final candidate in matches) {
+        if (candidate.dedupeKey == track.dedupeKey) return candidate;
+      }
+      return matches.first;
+    } catch (e) {
+      debugPrint('yt-first: Saavn fallback failed for "${track.title}": $e');
+      return null;
+    }
   }
-
-  /// Formats the elapsed/total pair the Now Playing screen shows.
-  String progressLabel(Duration position, Duration total) =>
-      '${Fmt.duration(position)} / ${Fmt.duration(total)}';
 }

@@ -51,7 +51,6 @@ class LibraryRepository {
 
   final LocalStore _store;
 
-  // ------------------------------------------------------------------ reads
 
   List<Track> liked() => _store.readLiked();
 
@@ -93,8 +92,18 @@ class LibraryRepository {
 
   List<Track> downloads() => _store.readDownloads();
 
-  bool isDownloaded(String trackId) =>
-      _store.readDownloads().any((t) => t.id == trackId);
+  int _downloadsRevision = -1;
+  Set<String> _downloadedIds = const {};
+
+  bool isDownloaded(String trackId) {
+    final revision = _store.revision.value;
+    if (revision != _downloadsRevision) {
+      _downloadsRevision = revision;
+      final tracks = _store.readDownloads();
+      _downloadedIds = {for (final track in tracks) track.id};
+    }
+    return _downloadedIds.contains(trackId);
+  }
 
   List<Track> history() => _store.readHistory();
 
@@ -107,17 +116,23 @@ class LibraryRepository {
       final id = map['id']?.toString() ?? '';
       final title = map['title']?.toString() ?? '';
       if (id.isEmpty || title.isEmpty) continue;
+      final kindStr = map['kind']?.toString();
+      final kind = CollectionKind.values.firstWhere(
+        (k) => k.name == kindStr,
+        orElse: () => CollectionKind.system,
+      );
       out.add(
         Collection(
           id: id,
           title: title,
-          kind: CollectionKind.system,
+          kind: kind,
           subtitle: map['subtitle']?.toString() ?? '',
           imageUrl: map['imageUrl']?.toString() ?? '',
           songCount: map['songCount'] is num
               ? (map['songCount'] as num).toInt()
               : null,
           permaUrl: map['permaUrl']?.toString(),
+          permaToken: map['permaToken']?.toString(),
         ),
       );
     }
@@ -306,7 +321,6 @@ class LibraryRepository {
     return result;
   }
 
-  // ----------------------------------------------------------------- writes
 
   Future<bool> toggleLike(Track track) async {
     final current = [..._store.readLiked()];
@@ -330,8 +344,13 @@ class LibraryRepository {
     await _store.writeLiked(current);
   }
 
-  Future<void> unlike(String trackId) async {
-    final current = [..._store.readLiked()]..removeWhere((t) => t.id == trackId);
+  Future<void> unlike(String trackId, [String? dedupeKey]) async {
+    final current = [..._store.readLiked()]
+      ..removeWhere((t) =>
+          t.id == trackId ||
+          (dedupeKey != null &&
+              dedupeKey.isNotEmpty &&
+              t.dedupeKey == dedupeKey));
     await _store.writeLiked(current);
   }
 
@@ -401,14 +420,15 @@ class LibraryRepository {
     await _store.pushRecentCollection({
       'id': collection.id,
       'title': collection.title,
+      'kind': collection.kind.name,
       'subtitle': collection.subtitle,
       'imageUrl': collection.imageUrl,
       'songCount': collection.songCount,
       'permaUrl': collection.permaUrl,
+      'permaToken': collection.permaToken,
     });
   }
 
-  // ---------------------------------------------------------------- playlists
 
   Future<UserPlaylist> createPlaylist({
     required String name,
