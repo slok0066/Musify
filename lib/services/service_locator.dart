@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:get_it/get_it.dart';
 
 import '../data/datasources/artwork_client.dart';
+import '../data/datasources/canvas_client.dart';
 import '../data/datasources/jiosaavn_client.dart';
 import '../data/datasources/lyrics_client.dart';
 import '../data/datasources/playlist_importer.dart';
@@ -105,6 +106,7 @@ void configureDependencies() {
   locator.registerLazySingleton<JioSaavnClient>(() => JioSaavnClient(locator<Dio>()));
   locator.registerLazySingleton<LyricsClient>(() => LyricsClient(locator<Dio>()));
   locator.registerLazySingleton<ArtworkClient>(() => ArtworkClient(locator<Dio>()));
+  locator.registerLazySingleton<CanvasClient>(() => CanvasClient(locator<Dio>()));
 
   locator.registerLazySingleton<LibraryRepository>(
     () => LibraryRepository(locator<LocalStore>()),
@@ -115,9 +117,11 @@ void configureDependencies() {
       saavn: locator<JioSaavnClient>(),
       lyrics: locator<LyricsClient>(),
       artwork: locator<ArtworkClient>(),
+      canvas: locator<CanvasClient>(),
       cache: locator<MediaCache>(),
       settings: locator<SettingsService>(),
       network: locator<NetworkMonitor>(),
+      store: locator<LocalStore>(),
     ),
   );
 

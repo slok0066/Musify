@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -11,13 +13,11 @@ import '../widgets/swiss_artwork.dart';
 import '../widgets/tactile_eight_d_switch.dart';
 import '../widgets/track_options_sheet.dart';
 
-/// The docked transport — a floating card that never leaves the screen once
-/// something is playing.
+/// The docked transport — Chronos Circular Ring design.
 ///
-/// The body opens Now Playing, the long-press opens the same `⋮` sheet every
-/// other row uses, and the progress hairline is the only thing in the card
-/// that repaints while the music runs (it listens to the engine directly, so a
-/// 250 ms position tick cannot cost a rebuild of the whole shell).
+/// The body opens Now Playing, long-press opens track options. The circular
+/// progress ring directly wraps the Play/Pause button and repaints smoothly
+/// without rebuilding the card.
 class MiniPlayerBar extends StatelessWidget {
   const MiniPlayerBar({super.key});
 
@@ -54,22 +54,19 @@ class _Bar extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-          SwissGrid.gutter, SwissGrid.xs, SwissGrid.gutter, SwissGrid.xs + 2),
+        SwissGrid.gutter,
+        SwissGrid.xs,
+        SwissGrid.gutter,
+        6,
+      ),
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: t.surfaceRaised,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(20),
           border: Border.all(color: t.hairline, width: 1),
-          boxShadow: [
-            BoxShadow(
-              color: t.dropShadow.withValues(alpha: t.isDark ? 0.35 : 0.08),
-              blurRadius: 16,
-              offset: const Offset(0, 4),
-            ),
-          ],
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(20),
           child: Material(
             color: Colors.transparent,
             child: InkWell(
@@ -83,141 +80,74 @@ class _Bar extends StatelessWidget {
               },
               highlightColor: Colors.transparent,
               splashColor: Colors.transparent,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(SwissGrid.sm),
-                    child: Row(
-                      children: [
-                        SwissArtwork(
-                          imageUrl: track.imageUrl,
-                          size: 44,
-                          radius: 12,
-                          showBorder: false,
-                          placeholderIcon: Icons.music_note,
-                          heroTag: 'musify-artwork',
-                        ),
-                        const SizedBox(width: SwissGrid.md),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              TextMarquee(
-                                text: track.title,
-                                style: SwissType.mono.copyWith(
-                                  color: t.accent,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                state.isBuffering
-                                    ? _bufferingLabel(state)
-                                    : track.artist,
-                                style: SwissType.bodyXs.copyWith(
-                                  color: state.isBuffering
-                                      ? t.accent
-                                      : t.inkMuted,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: SwissGrid.sm),
-                        if (state.errorText != null) ...[
-                          Icon(Icons.error_outline, size: 15, color: t.danger),
-                          const SizedBox(width: SwissGrid.sm),
-                        ],
-
-                        TactileIconKeycap(
-                          icon: Icons.shuffle,
-                          size: 34,
-                          iconSize: 17,
-                          ghost: true,
-                          tint: state.shuffle ? t.accent : t.inkMuted,
-                          tooltip: 'Shuffle',
-                          onPressed: player.toggleShuffle,
-                        ),
-                        const SizedBox(width: SwissGrid.xs),
-                        MiniEightDKeycap(
-                          enabled: state.is8D,
-                          onToggle: player.toggle8D,
-                        ),
-                        const SizedBox(width: SwissGrid.xs),
-                        TactileIconKeycap(
-                          icon: state.isPlaying ? Icons.pause : Icons.play_arrow,
-                          size: 40,
-                          iconSize: 22,
-                          ghost: true,
-                          tint: t.accent,
-                          tooltip: state.isPlaying ? 'Pause' : 'Play',
-                          onPressed: player.togglePlayPause,
-                        ),
-                        const SizedBox(width: SwissGrid.xs),
-                        TactileIconKeycap(
-                          icon: Icons.skip_next,
-                          size: 36,
-                          iconSize: 20,
-                          ghost: true,
-                          tooltip: 'Next',
-                          onPressed: player.next,
-                        ),
-                      ],
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                child: Row(
+                  children: [
+                    SwissArtwork(
+                      imageUrl: track.imageUrl,
+                      size: 44,
+                      radius: 12,
+                      showBorder: false,
+                      placeholderIcon: Icons.music_note,
+                      heroTag: 'musify-artwork',
                     ),
-                  ),
-                  // The progress hairline, tucked inside the card's bottom
-                  // edge: buffered band first, playhead on top.
-                  RepaintBoundary(
-                    child: ValueListenableBuilder<Duration>(
-                      valueListenable: engine.position,
-                      builder: (context, position, _) {
-                        final total = engine.duration.value.inMilliseconds;
-                        final played = total <= 0
-                            ? 0.0
-                            : (position.inMilliseconds / total).clamp(0.0, 1.0);
-                        final buffered = total <= 0
-                            ? 0.0
-                            : (engine.buffered.value.inMilliseconds / total)
-                                .clamp(0.0, 1.0);
-                        return Padding(
-                          padding: const EdgeInsets.fromLTRB(
-                              SwissGrid.sm, 0, SwissGrid.sm, SwissGrid.sm),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(2),
-                            child: SizedBox(
-                              height: 3,
-                              child: Stack(
-                                children: [
-                                  Positioned.fill(
-                                    child: ColoredBox(
-                                      color:
-                                          t.hairlineStrong.withValues(alpha: 0.4),
-                                    ),
-                                  ),
-                                  FractionallySizedBox(
-                                    widthFactor: buffered,
-                                    alignment: Alignment.centerLeft,
-                                    child: ColoredBox(color: t.hairlineStrong),
-                                  ),
-                                  FractionallySizedBox(
-                                    widthFactor: played,
-                                    alignment: Alignment.centerLeft,
-                                    child: ColoredBox(color: t.accent),
-                                  ),
-                                ],
-                              ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            track.title,
+                            style: SwissType.title.copyWith(
+                              color: t.ink,
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w700,
                             ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                        );
-                      },
+                          const SizedBox(height: 2),
+                          Text(
+                            state.isBuffering
+                                ? _bufferingLabel(state)
+                                : track.artist,
+                            style: SwissType.bodyXs.copyWith(
+                              color: state.isBuffering ? t.ink : t.inkMuted,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                    const SizedBox(width: SwissGrid.xs),
+                    if (state.errorText != null) ...[
+                      Icon(Icons.error_outline, size: 15, color: t.danger),
+                      const SizedBox(width: SwissGrid.xs),
+                    ],
+                    MiniEightDKeycap(
+                      enabled: state.is8D,
+                      onToggle: player.toggle8D,
+                    ),
+                    const SizedBox(width: 8),
+                    _CircularRingPlayButton(
+                      isPlaying: state.isPlaying,
+                      onToggle: player.togglePlayPause,
+                      engine: engine,
+                    ),
+                    const SizedBox(width: 4),
+                    TactileIconKeycap(
+                      icon: Icons.skip_next,
+                      size: 34,
+                      iconSize: 20,
+                      ghost: true,
+                      tooltip: 'Next',
+                      onPressed: player.next,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -230,5 +160,129 @@ class _Bar extends StatelessWidget {
     final fraction = state.bufferFraction;
     if (fraction == null) return 'BUFFERING';
     return 'BUFFERING ${(fraction * 100).round()}%';
+  }
+}
+
+class _CircularRingPlayButton extends StatelessWidget {
+  const _CircularRingPlayButton({
+    required this.isPlaying,
+    required this.onToggle,
+    required this.engine,
+  });
+
+  final bool isPlaying;
+  final VoidCallback onToggle;
+  final PlaybackService engine;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = SwissTokens.of(context);
+
+    return RepaintBoundary(
+      child: ValueListenableBuilder<Duration>(
+        valueListenable: engine.position,
+        builder: (context, position, _) {
+          final total = engine.duration.value.inMilliseconds;
+          final played = total <= 0
+              ? 0.0
+              : (position.inMilliseconds / total).clamp(0.0, 1.0);
+
+          return GestureDetector(
+            onTap: () {
+              Haptics.tap();
+              onToggle();
+            },
+            behavior: HitTestBehavior.opaque,
+            child: SizedBox(
+              width: 42,
+              height: 42,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  CustomPaint(
+                    size: const Size(42, 42),
+                    painter: _RingProgressPainter(
+                      progress: played,
+                      trackColor: t.hairlineStrong.withValues(alpha: 0.35),
+                      progressColor: t.ink,
+                      strokeWidth: 2.2,
+                    ),
+                  ),
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: t.surface,
+                      border: Border.all(color: t.hairline, width: 1),
+                    ),
+                    child: Center(
+                      child: Icon(
+                        isPlaying ? Icons.pause : Icons.play_arrow,
+                        size: 17,
+                        color: t.ink,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _RingProgressPainter extends CustomPainter {
+  const _RingProgressPainter({
+    required this.progress,
+    required this.trackColor,
+    required this.progressColor,
+    this.strokeWidth = 2.2,
+  });
+
+  final double progress;
+  final Color trackColor;
+  final Color progressColor;
+  final double strokeWidth;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = (size.width - strokeWidth) / 2;
+
+    final trackPaint = Paint()
+      ..color = trackColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth;
+
+    canvas.drawCircle(center, radius, trackPaint);
+
+    if (progress > 0) {
+      final progressPaint = Paint()
+        ..color = progressColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth
+        ..strokeCap = StrokeCap.round;
+
+      const startAngle = -math.pi / 2;
+      final sweepAngle = 2 * math.pi * progress.clamp(0.0, 1.0);
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: radius),
+        startAngle,
+        sweepAngle,
+        false,
+        progressPaint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _RingProgressPainter oldDelegate) {
+    return oldDelegate.progress != progress ||
+        oldDelegate.trackColor != trackColor ||
+        oldDelegate.progressColor != progressColor ||
+        oldDelegate.strokeWidth != strokeWidth;
   }
 }

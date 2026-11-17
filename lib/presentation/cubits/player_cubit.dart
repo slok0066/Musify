@@ -6,8 +6,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../data/models/track.dart';
 import '../../data/repositories/library_repository.dart';
+import '../../data/repositories/music_repository.dart';
 import '../../data/sources/local_store.dart';
 import '../../services/player/playback_service.dart';
+import '../../services/service_locator.dart';
 
 export '../../services/player/playback_service.dart' show RepeatMode;
 
@@ -206,6 +208,12 @@ class PlayerCubit extends Cubit<PlayerState> {
   void _sync() {
     if (isClosed) return;
     final track = _player.currentTrack.value;
+    if (track != null && track.id != state.track?.id) {
+      // Pre-warm canvas in the background so it plays instantly when player opens
+      try {
+        locator<MusicRepository>().canvasFor(track);
+      } catch (_) {}
+    }
     final next = PlayerState(
       track: track,
       isPlaying: _player.isPlaying.value,
@@ -250,11 +258,25 @@ class PlayerCubit extends Cubit<PlayerState> {
   }
 
   Future<void> playTrack(Track track, {List<Track>? context, String? source}) async {
-    final queue = _label(
-      [track, ...?context?.where((t) => t.id != track.id)],
-      source,
-    );
-    await _player.playTrack(queue.first, context: queue.sublist(1));
+    if (context != null && context.isNotEmpty) {
+      final index = context.indexWhere((t) => t.id == track.id);
+      if (index >= 0) {
+        final labelled = _label(context, source);
+        final currentQueue = _player.queue.value;
+        if (currentQueue.length == labelled.length &&
+            currentQueue.isNotEmpty &&
+            currentQueue.first.id == labelled.first.id &&
+            currentQueue.last.id == labelled.last.id) {
+          await _player.jumpTo(index);
+        } else {
+          await _player.playCollection(labelled, startIndex: index);
+        }
+        _recordHistory(labelled, index);
+        return;
+      }
+    }
+    final queue = _label([track], source);
+    await _player.playTrack(queue.first);
     _recordHistory(queue, 0);
   }
 

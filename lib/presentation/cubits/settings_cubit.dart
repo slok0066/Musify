@@ -218,6 +218,17 @@ class SettingsCubit extends Cubit<SettingsState> {
     ));
   }
 
+  void setSelectedArtists(List<String> artists) {
+    SettingsService.markSelectedArtistsNow(artists);
+    _update(_settings.value.copyWith(selectedArtists: artists));
+  }
+
+  void setCanvasEnabled(bool value) =>
+      _update(_settings.value.copyWith(canvasEnabled: value));
+
+  void toggleCanvas() =>
+      setCanvasEnabled(!_settings.value.canvasEnabled);
+
 
   Future<void> refreshStorage() async {
     try {

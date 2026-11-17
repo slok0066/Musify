@@ -11,11 +11,13 @@ import '../../services/settings_service.dart';
 import '../../services/yt_first/yt_first_config.dart';
 import '../../services/yt_first/youtube_service.dart';
 import '../datasources/artwork_client.dart';
+import '../datasources/canvas_client.dart';
 import '../datasources/jiosaavn_client.dart';
 import '../datasources/lyrics_client.dart';
 import '../models/collection.dart';
 import '../models/lyrics.dart';
 import '../models/track.dart';
+import '../sources/local_store.dart';
 
 /// Everything the Home screen renders, fetched in one orchestrated pass.
 class HomeFeed {
@@ -45,6 +47,48 @@ class HomeFeed {
 
   /// False when every remote rail came back empty.
   final bool hasData;
+
+  Map<String, dynamic> toMap() => {
+    'trending': RailItem.listTo(trending),
+    'charts': RailItem.listTo(charts),
+    'playlists': RailItem.listTo(playlists),
+    'albums': RailItem.listTo(albums),
+    'genres': Collection.listTo(genres),
+    'topSearches': Track.listTo(topSearches),
+    'featuredHits': Track.listTo(featuredHits),
+  };
+
+  static HomeFeed? fromMap(Object? raw) {
+    if (raw is! Map) return null;
+    final map = raw.cast<Object?, Object?>();
+    final trending = RailItem.listFrom(map['trending']);
+    final charts = RailItem.listFrom(map['charts']);
+    final playlists = RailItem.listFrom(map['playlists']);
+    final albums = RailItem.listFrom(map['albums']);
+    final genres = Collection.listFrom(map['genres']);
+    final topSearches = Track.listFrom(map['topSearches']);
+    final featuredHits = Track.listFrom(map['featuredHits']);
+
+    final hasData = trending.isNotEmpty ||
+        charts.isNotEmpty ||
+        playlists.isNotEmpty ||
+        albums.isNotEmpty ||
+        genres.isNotEmpty ||
+        topSearches.isNotEmpty ||
+        featuredHits.isNotEmpty;
+
+    return HomeFeed(
+      trending: trending,
+      charts: charts,
+      playlists: playlists,
+      albums: albums,
+      genres: genres,
+      topSearches: topSearches,
+      featuredHits: featuredHits,
+      isOffline: false,
+      hasData: hasData,
+    );
+  }
 }
 
 /// The four search facets the Search screen filters between.
@@ -85,19 +129,86 @@ class MusicRepository {
     required MediaCache cache,
     required SettingsService settings,
     required NetworkMonitor network,
+    CanvasClient? canvas,
+    LocalStore? store,
   })  : _saavn = saavn,
         _lyrics = lyrics,
         _artwork = artwork,
+        _canvas = canvas,
         _cache = cache,
         _settings = settings,
-        _network = network;
+        _network = network,
+        _store = store {
+    _hydrateCache();
+  }
 
   final JioSaavnClient _saavn;
   final LyricsClient _lyrics;
   final ArtworkClient _artwork;
+  final CanvasClient? _canvas;
   final MediaCache _cache;
   final SettingsService _settings;
   final NetworkMonitor _network;
+  final LocalStore? _store;
+
+  HomeFeed? _cachedFeed;
+  List<Collection>? _cachedMixes;
+  List<Track>? _cachedSuggestions;
+  DateTime? _feedFetchedAt;
+
+  HomeFeed? get cachedHome => _cachedFeed;
+  List<Collection>? get cachedMixes => _cachedMixes;
+  List<Track>? get cachedSuggestions => _cachedSuggestions;
+
+  void _hydrateCache() {
+    final s = _store;
+    if (s == null) return;
+    try {
+      final raw = s.readHomeFeedMap();
+      if (raw != null) {
+        final feed = HomeFeed.fromMap(raw);
+        if (feed != null && feed.hasData) {
+          _cachedFeed = feed;
+        }
+      }
+      final mixes = s.readCachedMixes();
+      if (mixes.isNotEmpty) {
+        _cachedMixes = mixes;
+      }
+      final suggestions = s.readCachedSuggestions();
+      if (suggestions.isNotEmpty) {
+        _cachedSuggestions = suggestions;
+      }
+    } catch (e) {
+      debugPrint('MusicRepository._hydrateCache failed: $e');
+    }
+  }
+
+  Future<void> _persistHome(HomeFeed feed) async {
+    final s = _store;
+    if (s == null || !feed.hasData) return;
+    try {
+      await s.writeHomeFeedMap(feed.toMap());
+    } catch (_) {}
+  }
+
+  Future<void> persistMixes(List<Collection> mixes) async {
+    _cachedMixes = mixes;
+    final s = _store;
+    if (s == null || mixes.isEmpty) return;
+    try {
+      await s.writeCachedMixes(mixes);
+    } catch (_) {}
+  }
+
+  Future<void> persistSuggestions(List<Track> suggestions) async {
+    _cachedSuggestions = suggestions;
+    final s = _store;
+    if (s == null || suggestions.isEmpty) return;
+    try {
+      await s.writeCachedSuggestions(suggestions);
+    } catch (_) {}
+  }
 
   /// Constructed on first use: with YouTube-first off there is no client,
   /// no socket and no YouTube call.
@@ -354,14 +465,27 @@ class MusicRepository {
 
   Future<HomeFeed> loadHome({bool refresh = false}) async {
     if (!_network.isOnline.value) {
+      if (_cachedFeed != null && _cachedFeed!.hasData) return _cachedFeed!;
       return HomeFeed(isOffline: true, hasData: false, genres: await genresOnly());
     }
 
-    final payload = await _saavn.fetchLaunch(refresh: refresh);
-    final topSearches = await _saavn.fetchTopSearches();
+    // Fast-path: serve in-memory snapshot if fresh and not explicitly pulled
+    if (!refresh && _cachedFeed != null && _cachedFeed!.hasData && _feedFetchedAt != null) {
+      if (DateTime.now().difference(_feedFetchedAt!) < const Duration(minutes: 5)) {
+        return _cachedFeed!;
+      }
+    }
+
+    final results = await Future.wait([
+      _saavn.fetchLaunch(refresh: refresh),
+      _saavn.fetchTopSearches(),
+    ]);
+    final payload = results[0] as LaunchPayload;
+    final topSearches = results[1] as List<Track>;
+
     final featuredHits = await _fetchFeaturedHits(payload);
 
-    return HomeFeed(
+    final feed = HomeFeed(
       trending: payload.trending,
       charts: payload.charts,
       playlists: payload.playlists,
@@ -372,6 +496,12 @@ class MusicRepository {
       isOffline: false,
       hasData: !payload.isEmpty || topSearches.isNotEmpty || featuredHits.isNotEmpty,
     );
+
+    _cachedFeed = feed;
+    _feedFetchedAt = DateTime.now();
+    unawaited(_persistHome(feed));
+
+    return feed;
   }
 
   Future<List<Track>> _fetchFeaturedHits(LaunchPayload payload) async {
@@ -396,11 +526,23 @@ class MusicRepository {
       }
     }
 
+    // 0. Instant harvest from trending & top searches already decoded
+    for (final item in payload.trending) {
+      if (item.isTrack && item.track != null) {
+        final isEng = item.track!.language?.toLowerCase() == 'english';
+        addTrack(item.track!, isEnglish: isEng);
+      }
+    }
+    for (final track in payload.topSearches) {
+      final isEng = track.language?.toLowerCase() == 'english';
+      addTrack(track, isEnglish: isEng);
+    }
+
     try {
-      // 1. Kick off top English hits concurrently for snappy loading
+      // 1. Kick off top English hits concurrently
       final englishFuture = _saavn.searchSongs('english pop hits', limit: 15);
 
-      // 2. Fetch tracks from the top trending playlists/charts (Hindi/Indian)
+      // 2. Fetch tracks from the top trending playlists/charts concurrently
       final collectionsToExamine = <Collection>[];
       for (final item in payload.trending) {
         if (item.isCollection && item.collection != null && collectionsToExamine.length < 2) {
@@ -413,29 +555,34 @@ class MusicRepository {
         }
       }
 
-      for (final col in collectionsToExamine) {
-        try {
-          final detail = await _saavn.playlistDetail(col, maxTracks: 15);
+      if (collectionsToExamine.isNotEmpty) {
+        final details = await Future.wait(
+          collectionsToExamine.map(
+            (col) => _saavn.playlistDetail(col, maxTracks: 15).catchError((_) => null),
+          ),
+        );
+        for (final detail in details) {
           if (detail != null && detail.tracks.isNotEmpty) {
             for (final track in detail.tracks) {
               final isEng = track.language?.toLowerCase() == 'english';
               addTrack(track, isEnglish: isEng);
             }
           }
-        } catch (_) {}
-        if (hindiHits.length >= 15) break;
-      }
-
-      // Query latest trending songs directly from search if still needed
-      if (hindiHits.length < 10) {
-        final queryResults = await _saavn.searchSongs('trending hits', limit: 20);
-        for (final track in queryResults) {
-          final isEng = track.language?.toLowerCase() == 'english';
-          addTrack(track, isEnglish: isEng);
         }
       }
 
-      // 3. Await English hits and add them
+      // Query latest trending songs directly if still needed
+      if (hindiHits.length < 10) {
+        try {
+          final queryResults = await _saavn.searchSongs('trending hits', limit: 20);
+          for (final track in queryResults) {
+            final isEng = track.language?.toLowerCase() == 'english';
+            addTrack(track, isEnglish: isEng);
+          }
+        } catch (_) {}
+      }
+
+      // 3. Await English hits
       try {
         final engResults = await englishFuture;
         for (final track in engResults) {
@@ -619,6 +766,11 @@ class MusicRepository {
         if (clean.isNotEmpty && !seeds.contains(clean)) seeds.add(clean);
         if (seeds.length >= 4) break;
       }
+      if (seeds.isEmpty) {
+        final chosen = _settings.value.selectedArtists
+            .where((a) => a.trim().isNotEmpty && a != 'skipped');
+        seeds.addAll(chosen.take(4));
+      }
     }
 
     if (seeds.isEmpty) {
@@ -630,14 +782,18 @@ class MusicRepository {
           .toList();
     }
 
+    final playlistResults = await Future.wait(
+      seeds.map((s) => _saavn.searchPlaylists(s, limit: 4).catchError((_) => <Collection>[])),
+    );
+
     final mixes = <Collection>[];
-    for (final seed in seeds) {
-      final playlists = await _saavn.searchPlaylists(seed, limit: 4);
+    for (var i = 0; i < seeds.length; i++) {
+      final playlists = playlistResults[i];
       if (playlists.isEmpty) continue;
       mixes.add(
         playlists.first.copyWith(
           kind: CollectionKind.mix,
-          subtitle: 'MADE FOR YOU · ${seed.toUpperCase()}',
+          subtitle: 'MADE FOR YOU · ${seeds[i].toUpperCase()}',
         ),
       );
     }
@@ -676,6 +832,12 @@ class MusicRepository {
         }
         if (seeds.length >= 3) break;
       }
+    }
+
+    if (seeds.isEmpty) {
+      final chosen = _settings.value.selectedArtists
+          .where((a) => a.trim().isNotEmpty && a != 'skipped');
+      seeds.addAll(chosen.take(3));
     }
 
     if (seeds.isEmpty) {
@@ -920,6 +1082,9 @@ class MusicRepository {
 
 
   Future<Lyrics?> lyricsFor(Track track) => _lyrics.fetch(track);
+
+  Future<String?> canvasFor(Track track) =>
+      _canvas?.fetch(track) ?? Future.value(null);
 
 
   /// Writes a permanent offline copy and returns the updated track.

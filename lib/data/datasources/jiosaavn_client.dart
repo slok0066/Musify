@@ -30,6 +30,33 @@ class RailItem {
   String get title => track?.title ?? collection?.title ?? '';
   String get subtitle => track?.displayArtist ?? collection?.subtitle ?? '';
   String get imageUrl => track?.imageUrl ?? collection?.imageUrl ?? '';
+
+  Map<String, dynamic> toMap() => {
+    if (track != null) 'track': track!.toMap(),
+    if (collection != null) 'collection': collection!.toMap(),
+  };
+
+  static RailItem? fromMap(Object? raw) {
+    if (raw is! Map) return null;
+    final map = raw.cast<Object?, Object?>();
+    if (map['track'] != null) {
+      final t = Track.fromMap(map['track']);
+      if (t != null) return RailItem.ofTrack(t);
+    }
+    if (map['collection'] != null) {
+      final c = Collection.fromMap(map['collection']);
+      if (c != null) return RailItem.ofCollection(c);
+    }
+    return null;
+  }
+
+  static List<Map<String, dynamic>> listTo(List<RailItem> list) =>
+      list.map((r) => r.toMap()).toList();
+
+  static List<RailItem> listFrom(Object? raw) {
+    if (raw is! List) return <RailItem>[];
+    return raw.map(fromMap).whereType<RailItem>().toList();
+  }
 }
 
 /// The entire launch payload in one round trip.

@@ -1,8 +1,8 @@
 {
-  "version": "2.0.0",
-  "build": 45,
-  "release_notes": "• Major v2.0.0 Release: Brand New App Icon & Launcher Logo\n• Seamless Mountain Atmosphere with adaptive sky fill across all daily phases\n• Clean Production UI: Streamlined minimal typography with unified playback\n• Curated Featured Hits: Dynamic blend of trending Hindi & English charts\n• YouTube-First Engine & Real-time 8D Binaural Audio",
-  "download_url": "https://github.com/slok0066/Musify/releases/download/v2.0.0/app-arm64-v8a-release.apk",
-  "apk_url": "https://github.com/slok0066/Musify/releases/download/v2.0.0/app-arm64-v8a-release.apk",
+  "version": "3.0.0",
+  "build": 46,
+  "release_notes": "• Major v3.0.0 Release: Full HD Video Canvas Player (1080p Apple Music + 720p YouTube)\n• Lightning-Fast Parallel Video Staging: Sub-second load times via concurrent range downloads\n• Smart Credit & Intro Skipping: Automatically seeks past intro logos, statutory warnings, and credits\n• Repositioned Ergonomic Player Controls: Seamless thumb-reach transport controls grounded in lower zone\n• Enhanced Swiss-Minimalist Obsidian Interface: Maximum breathing room and edge-to-edge cinematic playback",
+  "download_url": "https://github.com/slok0066/Musify/releases/download/v3.0.0/app-arm64-v8a-release.apk",
+  "apk_url": "https://github.com/slok0066/Musify/releases/download/v3.0.0/app-arm64-v8a-release.apk",
   "mandatory": false
 }

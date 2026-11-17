@@ -16,20 +16,38 @@ import 'screens/now_playing/now_playing_screen.dart';
 /// player should.
 
 void openNowPlaying(BuildContext context) {
+  // "Remove animations" gets an instant route: the cover still lands in place,
+  // there is just no flight to sit through.
+  final instant = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+
   Navigator.of(context, rootNavigator: true).push(
     PageRouteBuilder<void>(
-      transitionDuration: const Duration(milliseconds: 280),
-      reverseTransitionDuration: const Duration(milliseconds: 220),
+      transitionDuration:
+          instant ? Duration.zero : const Duration(milliseconds: 420),
+      reverseTransitionDuration:
+          instant ? Duration.zero : const Duration(milliseconds: 300),
       pageBuilder: (_, __, ___) => const NowPlayingScreen(),
       transitionsBuilder: (_, animation, __, child) {
-        final curved =
-            CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
-        return SlideTransition(
-          position: Tween<Offset>(
-            begin: const Offset(0, 1),
-            end: Offset.zero,
-          ).animate(curved),
-          child: child,
+        // The cover hero carries the motion; the page only settles in behind
+        // it, so the eye follows one object instead of two competing slides.
+        final rise = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+        return FadeTransition(
+          opacity: CurvedAnimation(
+            parent: animation,
+            curve: const Interval(0.05, 0.7, curve: Curves.easeOut),
+            reverseCurve: const Interval(0.35, 1, curve: Curves.easeIn),
+          ),
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 0.035),
+              end: Offset.zero,
+            ).animate(rise),
+            child: child,
+          ),
         );
       },
     ),

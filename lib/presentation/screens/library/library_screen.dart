@@ -8,7 +8,6 @@ import '../../../data/models/collection.dart';
 import '../../../data/models/user_playlist.dart';
 import '../../../data/repositories/library_repository.dart';
 import '../../cubits/library_cubit.dart';
-import '../../cubits/navigation_cubit.dart';
 import '../../navigation.dart';
 import '../../widgets/collection_cards.dart';
 import '../../widgets/import_url_sheet.dart';
@@ -49,123 +48,162 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
         return Column(
           children: [
-            ScreenHeader(
-              tab: AppTab.library,
-              subtitle: '${state.entries.length} items • '
-                  '${state.liked.length} liked • ${state.downloads.length} offline',
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TactileIconKeycap(
-                    icon: Icons.add,
-                    size: 40,
-                    iconSize: 20,
-                    tooltip: 'Create new playlist',
-                    onPressed: () => _showCreatePlaylistDialog(context),
-                  ),
-                  const SizedBox(width: SwissGrid.sm),
-                  TactileIconKeycap(
-                    icon: Icons.link,
-                    size: 40,
-                    iconSize: 19,
-                    tooltip: 'Import playlist',
-                    onPressed: () => showImportUrlSheet(context),
-                  ),
-                  const SizedBox(width: SwissGrid.sm),
-                  TactileIconKeycap(
-                    icon: state.layout == LibraryLayout.list
-                        ? Icons.view_module_outlined
-                        : Icons.view_agenda_outlined,
-                    size: 40,
-                    iconSize: 18,
-                    tooltip: state.layout == LibraryLayout.list
-                        ? 'Grid view'
-                        : 'List view',
-                    onPressed: cubit.toggleLayout,
-                  ),
-                ],
-              ),
-              actions: Row(
-                children: [
-                  Expanded(
-                    child: Container(
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: t.surfaceRaised,
-                        borderRadius:
-                            BorderRadius.circular(SwissTokens.radiusFull),
-                        border: Border.all(color: t.hairline, width: 1),
-                      ),
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Row(
-                        children: [
-                          Icon(Icons.search, size: 16, color: t.inkMuted),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: TextField(
-                              controller: _search,
-                              style: SwissType.bodySm.copyWith(color: t.ink),
-                              cursorColor: t.accent,
-                              onChanged: cubit.setQuery,
-                              decoration: InputDecoration(
-                                border: InputBorder.none,
-                                isDense: true,
-                                contentPadding:
-                                    const EdgeInsets.symmetric(vertical: 8),
-                                hintText: 'Filter your collection...',
-                                hintStyle: SwissType.bodySm
-                                    .copyWith(color: t.inkFaint),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: SwissGrid.sm),
-                  TactileKeycap(
-                    height: 38,
-                    onPressed: () => cubit.setSort(_nextSort(state.sort)),
-                    tooltip: 'Change sort order',
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
+            SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  SwissGrid.gutter,
+                  SwissGrid.sm,
+                  SwissGrid.gutter,
+                  SwissGrid.xs,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ---- Clean Header Row -----------------------------------
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Text(_sortTag(state.sort)),
-                        const SizedBox(width: 2),
-                        Icon(Icons.arrow_drop_down,
-                            size: 14, color: t.inkMuted),
+                        Text(
+                          'Library',
+                          style: SwissType.display.copyWith(
+                            color: t.ink,
+                            fontSize: 26,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.6,
+                          ),
+                        ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            TactileIconKeycap(
+                              icon: Icons.add,
+                              size: 38,
+                              iconSize: 20,
+                              tooltip: 'Create new playlist',
+                              onPressed: () => _showCreatePlaylistDialog(context),
+                            ),
+                            const SizedBox(width: SwissGrid.xs + 2),
+                            TactileIconKeycap(
+                              icon: Icons.link,
+                              size: 38,
+                              iconSize: 19,
+                              tooltip: 'Import playlist',
+                              onPressed: () => showImportUrlSheet(context),
+                            ),
+                            const SizedBox(width: SwissGrid.xs + 2),
+                            TactileIconKeycap(
+                              icon: state.layout == LibraryLayout.list
+                                  ? Icons.view_module_outlined
+                                  : Icons.view_agenda_outlined,
+                              size: 38,
+                              iconSize: 18,
+                              tooltip: state.layout == LibraryLayout.list
+                                  ? 'Grid view'
+                                  : 'List view',
+                              onPressed: cubit.toggleLayout,
+                            ),
+                          ],
+                        ),
                       ],
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 12),
+                    // ---- Search & Sort Row ----------------------------------
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: t.surfaceRaised,
+                              borderRadius:
+                                  BorderRadius.circular(SwissTokens.radiusFull),
+                              border: Border.all(color: t.hairline, width: 1),
+                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            child: Row(
+                              children: [
+                                Icon(Icons.search, size: 16, color: t.inkMuted),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: TextField(
+                                    controller: _search,
+                                    style: SwissType.bodySm.copyWith(color: t.ink),
+                                    cursorColor: t.accent,
+                                    onChanged: cubit.setQuery,
+                                    decoration: InputDecoration(
+                                      border: InputBorder.none,
+                                      isDense: true,
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(vertical: 8),
+                                      hintText: 'Filter your collection...',
+                                      hintStyle: SwissType.bodySm
+                                          .copyWith(color: t.inkFaint),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: SwissGrid.sm),
+                        TactileKeycap(
+                          height: 38,
+                          onPressed: () => cubit.setSort(_nextSort(state.sort)),
+                          tooltip: 'Change sort order',
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(_sortTag(state.sort)),
+                              const SizedBox(width: 2),
+                              Icon(Icons.arrow_drop_down,
+                                  size: 14, color: t.inkMuted),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    // ---- Filter Chips Rail ----------------------------------
+                    PillStrip(
+                      padding: EdgeInsets.zero,
+                      children: [
+                        SwissPill(
+                          label: 'ALL',
+                          selected: state.filter == LibraryFilter.all,
+                          dense: true,
+                          onTap: () => cubit.setFilter(LibraryFilter.all),
+                        ),
+                        SwissPill(
+                          label: 'PLAYLISTS',
+                          selected: state.filter == LibraryFilter.playlists,
+                          dense: true,
+                          onTap: () => cubit.setFilter(LibraryFilter.playlists),
+                        ),
+                        SwissPill(
+                          label: 'ALBUMS',
+                          selected: state.filter == LibraryFilter.albums,
+                          dense: true,
+                          onTap: () => cubit.setFilter(LibraryFilter.albums),
+                        ),
+                        SwissPill(
+                          label: 'ARTISTS',
+                          selected: state.filter == LibraryFilter.artists,
+                          dense: true,
+                          onTap: () => cubit.setFilter(LibraryFilter.artists),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
             if (state.importProgress != null)
               _ImportProgressPanel(progress: state.importProgress!),
             if (downloadsInFlight > 0) _DownloadStrip(state: state),
             Expanded(
-              child: state.entries.isEmpty
-                  ? ListView(
-                      children: [
-                        MusifyStatePanel(
-                          index: '00 // EMPTY LIBRARY',
-                          title: _emptyTitle(state.filter),
-                          message: state.filter == LibraryFilter.playlists
-                              ? 'Tap Create Playlist above or import from YouTube and Spotify.'
-                              : 'Like a song, download it for offline, or create a playlist to fill this shelf.',
-                          icon: Icons.library_music_outlined,
-                          actionLabel: state.filter == LibraryFilter.playlists
-                              ? 'CREATE A PLAYLIST'
-                              : 'IMPORT A PLAYLIST',
-                          onAction: state.filter == LibraryFilter.playlists
-                              ? () => _showCreatePlaylistDialog(context)
-                              : () => showImportUrlSheet(context),
-                        ),
-                      ],
-                    )
-                  : state.layout == LibraryLayout.grid
-                      ? _LibraryGrid(state: state)
-                      : _LibraryList(state: state),
+              child: _LibraryBody(state: state),
             ),
           ],
         );
@@ -195,49 +233,294 @@ class _LibraryScreenState extends State<LibraryScreen> {
       };
 }
 
-class _LibraryList extends StatelessWidget {
-  const _LibraryList({required this.state});
+class _LibraryBody extends StatelessWidget {
+  const _LibraryBody({required this.state});
 
   final LibraryState state;
 
   @override
   Widget build(BuildContext context) {
-    return ListView.builder(
-      padding: const EdgeInsets.only(bottom: SwissGrid.xxl),
-      itemCount: state.entries.length,
-      itemBuilder: (context, index) => _LibraryRow(entry: state.entries[index]),
+    final t = SwissTokens.of(context);
+    final showPinnedVaults =
+        state.filter == LibraryFilter.all && state.query.isEmpty;
+    final otherEntries = showPinnedVaults
+        ? state.entries
+            .where((e) => e.id != '__liked__' && e.id != '__downloads__')
+            .toList()
+        : state.entries;
+
+    if (state.entries.isEmpty) {
+      return ListView(
+        children: [
+          MusifyStatePanel(
+            index: '00 // EMPTY LIBRARY',
+            title: _LibraryScreenState._emptyTitle(state.filter),
+            message: state.filter == LibraryFilter.playlists
+                ? 'Tap Create Playlist above or import from YouTube and Spotify.'
+                : 'Like a song, download it for offline, or create a playlist to fill this shelf.',
+            icon: Icons.library_music_outlined,
+            actionLabel: state.filter == LibraryFilter.playlists
+                ? 'CREATE A PLAYLIST'
+                : 'IMPORT A PLAYLIST',
+            onAction: state.filter == LibraryFilter.playlists
+                ? () => _showCreatePlaylistDialog(context)
+                : () => showImportUrlSheet(context),
+          ),
+        ],
+      );
+    }
+
+    return CustomScrollView(
+      slivers: [
+        if (showPinnedVaults)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                SwissGrid.gutter,
+                SwissGrid.sm,
+                SwissGrid.gutter,
+                SwissGrid.xs,
+              ),
+              child: _PinnedVaults(state: state),
+            ),
+          ),
+        if (showPinnedVaults && otherEntries.isNotEmpty)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                SwissGrid.gutter,
+                SwissGrid.md,
+                SwissGrid.gutter,
+                SwissGrid.xs,
+              ),
+              child: Text(
+                'YOUR PLAYLISTS & COLLECTIONS',
+                style: SwissType.micro.copyWith(
+                  color: t.inkMuted,
+                  letterSpacing: 1.2,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        if (state.layout == LibraryLayout.grid)
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(
+              SwissGrid.gutter,
+              SwissGrid.xs,
+              SwissGrid.gutter,
+              SwissGrid.xxl,
+            ),
+            sliver: SliverGrid(
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                mainAxisSpacing: SwissGrid.md,
+                crossAxisSpacing: SwissGrid.md,
+                childAspectRatio: 0.84,
+              ),
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final entry = otherEntries[index];
+                  return CollectionGridTile(
+                    title: entry.title,
+                    subtitle: entry.subtitle,
+                    imageUrl: entry.imageUrl ?? '',
+                    mosaic: entry.mosaic,
+                    round: entry.systemKind == CollectionKind.artist,
+                    badge: entry.isSystem ? 'SYSTEM' : null,
+                    onTap: () => _open(context, entry),
+                  );
+                },
+                childCount: otherEntries.length,
+              ),
+            ),
+          )
+        else
+          SliverPadding(
+            padding: const EdgeInsets.only(bottom: SwissGrid.xxl),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) => _LibraryRow(entry: otherEntries[index]),
+                childCount: otherEntries.length,
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
 
-class _LibraryGrid extends StatelessWidget {
-  const _LibraryGrid({required this.state});
+class _PinnedVaults extends StatelessWidget {
+  const _PinnedVaults({required this.state});
 
   final LibraryState state;
 
   @override
   Widget build(BuildContext context) {
-    return GridView.builder(
-      padding: const EdgeInsets.all(SwissGrid.gutter),
-      itemCount: state.entries.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisSpacing: SwissGrid.md,
-        crossAxisSpacing: SwissGrid.md,
-        childAspectRatio: 0.84,
+    final t = SwissTokens.of(context);
+
+    return Row(
+      children: [
+        // Liked Songs Vault Card
+        Expanded(
+          child: _VaultCard(
+            title: 'Liked Songs',
+            subtitle: '${state.liked.length} songs',
+            badge: 'PINNED',
+            badgeColor: t.inkMuted,
+            icon: Icons.favorite,
+            accentColor: const Color(0xFFFF4D4D),
+            onTap: () {
+              Haptics.tap();
+              openCollection(
+                context,
+                Collection(
+                  id: '__liked__',
+                  title: 'LIKED SONGS',
+                  kind: CollectionKind.system,
+                  subtitle: '${state.liked.length} TRACKS',
+                  imageUrl:
+                      state.liked.isNotEmpty ? state.liked.first.imageUrl : '',
+                ),
+                tracks: state.liked,
+              );
+            },
+          ),
+        ),
+        const SizedBox(width: SwissGrid.sm),
+        // Offline Vault Card
+        Expanded(
+          child: _VaultCard(
+            title: 'Offline Vault',
+            subtitle: '${state.downloads.length} songs',
+            badge: 'OFFLINE',
+            badgeColor: const Color(0xFF38BDF8),
+            icon: Icons.storage_rounded,
+            accentColor: const Color(0xFF38BDF8),
+            onTap: () {
+              Haptics.tap();
+              openCollection(
+                context,
+                Collection(
+                  id: '__downloads__',
+                  title: 'OFFLINE VAULT',
+                  kind: CollectionKind.system,
+                  subtitle: '${state.downloads.length} TRACKS',
+                  imageUrl: state.downloads.isNotEmpty
+                      ? state.downloads.first.imageUrl
+                      : '',
+                ),
+                tracks: state.downloads,
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _VaultCard extends StatelessWidget {
+  const _VaultCard({
+    required this.title,
+    required this.subtitle,
+    required this.badge,
+    required this.badgeColor,
+    required this.icon,
+    required this.accentColor,
+    required this.onTap,
+  });
+
+  final String title;
+  final String subtitle;
+  final String badge;
+  final Color badgeColor;
+  final IconData icon;
+  final Color accentColor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = SwissTokens.of(context);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: t.surfaceRaised,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: t.hairline, width: 1),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: accentColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: accentColor.withValues(alpha: 0.25),
+                        width: 1,
+                      ),
+                    ),
+                    child: Center(
+                      child: Icon(icon, size: 18, color: accentColor),
+                    ),
+                  ),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: t.surface,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: t.hairline, width: 1),
+                    ),
+                    child: Text(
+                      badge,
+                      style: SwissType.micro.copyWith(
+                        color: badgeColor,
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Text(
+                title,
+                style: SwissType.title.copyWith(
+                  color: t.ink,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.2,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: SwissType.bodyXs.copyWith(color: t.inkFaint),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
       ),
-      itemBuilder: (context, index) {
-        final entry = state.entries[index];
-        return CollectionGridTile(
-          title: entry.title,
-          subtitle: entry.subtitle,
-          imageUrl: entry.imageUrl ?? '',
-          mosaic: entry.mosaic,
-          round: entry.systemKind == CollectionKind.artist,
-          badge: entry.isSystem ? 'SYSTEM' : null,
-          onTap: () => _open(context, entry),
-        );
-      },
     );
   }
 }
@@ -287,31 +570,34 @@ class _LibraryRow extends StatelessWidget {
                         ? Container(
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(12),
-                              gradient: const LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: [
-                                  Color(0xFF6366F1),
-                                  Color(0xFFA855F7),
-                                  Color(0xFFEC4899),
-                                ],
+                              color: const Color(0xFFFF4D4D)
+                                  .withValues(alpha: 0.12),
+                              border: Border.all(
+                                color: const Color(0xFFFF4D4D)
+                                    .withValues(alpha: 0.3),
+                                width: 1,
                               ),
                             ),
                             child: const Center(
                               child: Icon(Icons.favorite,
-                                  size: 26, color: Colors.white),
+                                  size: 24, color: Color(0xFFFF4D4D)),
                             ),
                           )
                         : isDownloads
                             ? Container(
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(12),
-                                  color: t.surfaceRaised,
-                                  border: Border.all(color: t.hairline, width: 1),
+                                  color: const Color(0xFF38BDF8)
+                                      .withValues(alpha: 0.12),
+                                  border: Border.all(
+                                    color: const Color(0xFF38BDF8)
+                                        .withValues(alpha: 0.3),
+                                    width: 1,
+                                  ),
                                 ),
-                                child: Center(
+                                child: const Center(
                                   child: Icon(Icons.storage_rounded,
-                                      size: 24, color: t.accent),
+                                      size: 24, color: Color(0xFF38BDF8)),
                                 ),
                               )
                             : entry.mosaic.length > 1

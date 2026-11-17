@@ -1,13 +1,22 @@
+import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:video_player/video_player.dart';
 
+import '../../../core/artwork_url.dart';
 import '../../../core/theme/swiss_tokens.dart';
 import '../../../core/theme/tactile_decorations.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../data/models/track.dart';
+import '../../../data/repositories/music_repository.dart';
+import '../../../services/service_locator.dart';
 import '../../cubits/library_cubit.dart';
 import '../../cubits/player_cubit.dart';
+import '../../cubits/settings_cubit.dart';
 import '../../widgets/artwork_color.dart';
 import '../../widgets/eight_d_calibration_sheet.dart';
 import '../../widgets/swiss_artwork.dart';
@@ -71,98 +80,409 @@ class NowPlayingScreen extends StatelessWidget {
   }
 }
 
-class _Face extends StatelessWidget {
+class _Face extends StatefulWidget {
   const _Face({required this.state});
 
   final PlayerState state;
 
   @override
+  State<_Face> createState() => _FaceState();
+}
+
+class _FaceState extends State<_Face> with WidgetsBindingObserver {
+  VideoPlayerController? _videoController;
+  String? _loadedTrackId;
+  bool _canvasVisible = true;
+  bool _loadingVideo = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    final track = widget.state.track;
+    // ignore: avoid_print
+    print('[CANVAS-UI] _FaceState.initState, track="${track?.title}"');
+    if (track != null) {
+      _loadCanvas(track);
+    }
+  }
+
+  @override
+  void didUpdateWidget(_Face oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final currentTrack = widget.state.track;
+    final oldTrack = oldWidget.state.track;
+
+    if (currentTrack?.id != oldTrack?.id) {
+      _disposeVideo();
+      if (currentTrack != null) {
+        _loadCanvas(currentTrack);
+      }
+    } else if (widget.state.isPlaying != oldWidget.state.isPlaying) {
+      if (widget.state.isPlaying) {
+        _videoController?.play();
+      } else {
+        _videoController?.pause();
+      }
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState lifecycle) {
+    if (lifecycle == AppLifecycleState.resumed) {
+      if (widget.state.isPlaying &&
+          _videoController?.value.isInitialized == true) {
+        _videoController?.play();
+      }
+    } else {
+      _videoController?.pause();
+    }
+  }
+
+  Future<void> _loadCanvas(Track track) async {
+    // ignore: avoid_print
+    print('[CANVAS-UI] _loadCanvas started for: "${track.title}"');
+    final settings = context.read<SettingsCubit>().state.settings;
+    if (!settings.canvasEnabled) {
+      // ignore: avoid_print
+      print('[CANVAS-UI] canvasEnabled is false in settings');
+      return;
+    }
+
+    final trackId = track.id;
+    _loadedTrackId = trackId;
+    setState(() {
+      _loadingVideo = true;
+    });
+
+    try {
+      final videoUrl = await locator<MusicRepository>().canvasFor(track);
+      // ignore: avoid_print
+      print('[CANVAS-UI] Received URL: $videoUrl');
+      if (!mounted || _loadedTrackId != trackId || videoUrl == null) {
+        if (mounted && _loadedTrackId == trackId) {
+          setState(() {
+            _loadingVideo = false;
+          });
+        }
+        return;
+      }
+
+      final isLocal =
+          !videoUrl.startsWith('http://') && !videoUrl.startsWith('https://');
+      final controller = isLocal
+          ? VideoPlayerController.file(
+              File(videoUrl.startsWith('file://')
+                  ? Uri.parse(videoUrl).toFilePath()
+                  : videoUrl),
+              videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+            )
+          : VideoPlayerController.networkUrl(
+              Uri.parse(videoUrl),
+              videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+            );
+
+      // ignore: avoid_print
+      print('[CANVAS-UI] Initializing video controller for $videoUrl');
+      await controller.initialize();
+      controller.setVolume(0.0); // Strictly muted to preserve SoLoud audio
+
+      final totalDur = controller.value.duration;
+      // Skip studio intro / credit scenes (e.g. T-Series, Zee Music, statutory disclaimers)
+      final startOffset = isLocal && totalDur.inSeconds > 25
+          ? const Duration(seconds: 18)
+          : (isLocal && totalDur.inSeconds > 15
+              ? const Duration(seconds: 10)
+              : Duration.zero);
+
+      if (startOffset > Duration.zero) {
+        await controller.seekTo(startOffset);
+        controller.setLooping(false);
+        controller.addListener(() {
+          final pos = controller.value.position;
+          final dur = controller.value.duration;
+          if (dur > Duration.zero &&
+              (pos >= dur || (dur - pos) <= const Duration(milliseconds: 400))) {
+            controller.seekTo(startOffset);
+            controller.play();
+          }
+        });
+      } else {
+        controller.setLooping(true);
+      }
+      // ignore: avoid_print
+      print('[CANVAS-UI] Video controller initialized successfully! size: ${controller.value.size}');
+
+      if (!mounted || _loadedTrackId != trackId) {
+        controller.dispose();
+        return;
+      }
+
+      _videoController?.dispose();
+      _videoController = controller;
+      _loadingVideo = false;
+
+      if (widget.state.isPlaying) {
+        controller.play();
+      }
+      setState(() {});
+    } catch (e) {
+      // ignore: avoid_print
+      print('[CANVAS-UI] Error initializing canvas video: $e');
+      if (mounted && _loadedTrackId == trackId) {
+        setState(() {
+          _loadingVideo = false;
+        });
+      }
+    }
+  }
+
+  void _disposeVideo() {
+    _videoController?.pause();
+    _videoController?.dispose();
+    _videoController = null;
+    _loadedTrackId = null;
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _disposeVideo();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final t = SwissTokens.of(context);
     final player = context.read<PlayerCubit>();
-    final track = state.track!;
+    final track = widget.state.track!;
+    final state = widget.state;
+
+    final hasCanvas = _videoController != null &&
+        _videoController!.value.isInitialized &&
+        _videoController!.value.size.width > 0 &&
+        _videoController!.value.size.height > 0;
+    final showCanvas = hasCanvas && _canvasVisible;
 
     return ArtworkColorBuilder(
       imageUrl: track.imageUrl,
       builder: (context, dominantColor) {
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 600),
-          curve: Curves.easeInOut,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                dominantColor.withValues(alpha: t.isDark ? 0.38 : 0.22),
-                dominantColor.withValues(alpha: t.isDark ? 0.12 : 0.06),
-                t.bg,
-              ],
-              stops: const [0.0, 0.44, 0.86],
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            // Layer 1: Hardware Canvas Video Layer
+            if (showCanvas)
+              Positioned.fill(
+                child: FittedBox(
+                  fit: BoxFit.cover,
+                  clipBehavior: Clip.hardEdge,
+                  child: SizedBox(
+                    width: _videoController!.value.size.width,
+                    height: _videoController!.value.size.height,
+                    child: VideoPlayer(_videoController!),
+                  ),
+                ),
+              ),
+
+            // Layer 2: Obsidian Scrim Gradient
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: showCanvas
+                      ? LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.black.withValues(alpha: 0.65),
+                            Colors.black.withValues(alpha: 0.15),
+                            Colors.transparent,
+                            Colors.black.withValues(alpha: 0.45),
+                            t.bg.withValues(alpha: 0.90),
+                            t.bg,
+                          ],
+                          stops: const [0.0, 0.16, 0.40, 0.65, 0.88, 1.0],
+                        )
+                      : LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            dominantColor.withValues(alpha: t.isDark ? 0.38 : 0.22),
+                            dominantColor.withValues(alpha: t.isDark ? 0.12 : 0.06),
+                            t.bg,
+                          ],
+                          stops: const [0.0, 0.44, 0.86],
+                        ),
+                ),
+              ),
             ),
-          ),
-          child: SafeArea(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final artSize = math
-                    .min(
-                      constraints.maxWidth - SwissGrid.gutter * 2,
-                      constraints.maxHeight * 0.38,
-                    )
-                    .clamp(120.0, 380.0);
 
-                return SingleChildScrollView(
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                    child: IntrinsicHeight(
-                      child: Column(
-                        children: [
-                          const _TopBar(),
-                          const SizedBox(height: SwissGrid.md),
+            // Layer 3: Foreground Controls
+            SafeArea(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final artSize = math
+                      .min(
+                        constraints.maxWidth - SwissGrid.gutter * 2,
+                        constraints.maxHeight * 0.38,
+                      )
+                      .clamp(120.0, 380.0);
 
-                        Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: SwissGrid.gutter),
-                          child: Stack(
-                            children: [
-                              SwissArtwork(
-                                imageUrl: track.imageUrl,
-                                size: artSize,
-                                radius: SwissTokens.radiusLg,
-                                placeholderIcon: Icons.music_note,
-                                heroTag: 'musify-artwork',
-                                filterQuality: FilterQuality.high,
-                              ),
-                              if (state.is8D)
-                                Positioned(
-                                  right: 10,
-                                  top: 10,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: t.accent,
-                                      borderRadius: BorderRadius.circular(
-                                          SwissTokens.radiusFull),
-                                    ),
-                                    child: Text(
-                                      'SPATIAL 8D',
-                                      style: SwissType.micro.copyWith(
-                                        color: t.accentInk,
-                                        fontWeight: FontWeight.w700,
+                  return SingleChildScrollView(
+                    child: ConstrainedBox(
+                      constraints:
+                          BoxConstraints(minHeight: constraints.maxHeight),
+                      child: IntrinsicHeight(
+                        child: Column(
+                          children: [
+                            _TopBar(
+                              hasCanvas: hasCanvas,
+                              canvasActive: showCanvas,
+                              isLoadingCanvas: _loadingVideo,
+                              onToggleCanvas: hasCanvas
+                                  ? () {
+                                      Haptics.tap();
+                                      setState(() => _canvasVisible = !_canvasVisible);
+                                    }
+                                  : null,
+                            ),
+                            const SizedBox(height: SwissGrid.md),
+
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: SwissGrid.gutter),
+                              child: GestureDetector(
+                                onTap: hasCanvas
+                                    ? () {
+                                        Haptics.tap();
+                                        setState(() => _canvasVisible = !_canvasVisible);
+                                      }
+                                    : null,
+                                behavior: HitTestBehavior.opaque,
+                                child: SizedBox(
+                                  height: artSize,
+                                  width: constraints.maxWidth,
+                                  child: Center(
+                                    child: AnimatedCrossFade(
+                                      duration: const Duration(milliseconds: 350),
+                                      crossFadeState: showCanvas
+                                          ? CrossFadeState.showSecond
+                                          : CrossFadeState.showFirst,
+                                      firstChild: Stack(
+                                        alignment: Alignment.center,
+                                        children: [
+                                          Hero(
+                                            tag: 'musify-artwork',
+                                            curve: Curves.easeOutCubic,
+                                            reverseCurve: Curves.easeInCubic,
+                                            flightShuttleBuilder: (
+                                              _,
+                                              animation,
+                                              __,
+                                              ___,
+                                              ____,
+                                            ) =>
+                                                _ArtworkShuttle(
+                                              animation: animation,
+                                              imageUrl: track.imageUrl,
+                                              cacheDim: SwissArtwork.cacheDimFor(
+                                                  artSize),
+                                            ),
+                                            child: SwissArtwork(
+                                              imageUrl: track.imageUrl,
+                                              size: artSize,
+                                              radius: SwissTokens.radiusLg,
+                                              placeholderIcon: Icons.music_note,
+                                              filterQuality: FilterQuality.high,
+                                            ),
+                                          ),
+                                          if (state.is8D)
+                                            Positioned(
+                                              right: 10,
+                                              top: 10,
+                                              child: Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                  horizontal: 10,
+                                                  vertical: 4,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: t.accent,
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                          SwissTokens.radiusFull),
+                                                ),
+                                                child: Text(
+                                                  'SPATIAL 8D',
+                                                  style:
+                                                      SwissType.micro.copyWith(
+                                                    color: t.accentInk,
+                                                    fontWeight: FontWeight.w700,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                      secondChild: SizedBox(
+                                        height: artSize,
+                                        width: constraints.maxWidth,
+                                        child: Center(
+                                          child: state.is8D
+                                              ? Container(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                    horizontal: 12,
+                                                    vertical: 5,
+                                                  ),
+                                                  decoration: BoxDecoration(
+                                                    color: t.surfaceSunken
+                                                        .withValues(alpha: 0.6),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            SwissTokens
+                                                                .radiusFull),
+                                                    border: Border.all(
+                                                      color: t.hairline,
+                                                      width: 1,
+                                                    ),
+                                                  ),
+                                                  child: Row(
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    children: [
+                                                      Icon(
+                                                        Icons.surround_sound,
+                                                        size: 14,
+                                                        color: t.accent,
+                                                      ),
+                                                      const SizedBox(width: 6),
+                                                      Text(
+                                                        'SPATIAL 8D ACTIVE',
+                                                        style: SwissType.micro
+                                                            .copyWith(
+                                                          color: t.accent,
+                                                          fontWeight:
+                                                              FontWeight.w700,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                )
+                                              : const SizedBox.shrink(),
+                                        ),
                                       ),
                                     ),
                                   ),
                                 ),
-                            ],
-                          ),
-                        ),
+                              ),
+                            ),
+
+                        const Spacer(flex: 3),
 
                         Padding(
                           padding: const EdgeInsets.fromLTRB(
                             SwissGrid.gutter,
-                            SwissGrid.lg,
+                            0,
                             SwissGrid.gutter,
                             SwissGrid.sm,
                           ),
@@ -375,8 +695,8 @@ class _Face extends StatelessWidget {
                     ),
                   ),
 
-                  const Spacer(),
-                  const SizedBox(height: SwissGrid.md),
+                  const Spacer(flex: 1),
+                  const SizedBox(height: SwissGrid.sm),
 
                   Padding(
                     padding: const EdgeInsets.symmetric(
@@ -447,14 +767,74 @@ class _Face extends StatelessWidget {
       },
     ),
   ),
+],
 );
 },
 );
 }
 }
 
+/// The cover in flight. It renders the plate's own cached decode and opens the
+/// mini bar's 12 px corners into the plate's, so the flight never swaps image
+/// resolutions or snaps a radius at either end.
+class _ArtworkShuttle extends StatelessWidget {
+  const _ArtworkShuttle({
+    required this.animation,
+    required this.imageUrl,
+    required this.cacheDim,
+  });
+
+  final Animation<double> animation;
+  final String imageUrl;
+  final int cacheDim;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = SwissTokens.of(context);
+    final url = hiresArtwork(imageUrl);
+    final cover = url.isEmpty
+        ? ColoredBox(
+            color: t.surfaceSunken,
+            child: Icon(Icons.music_note, color: t.inkFaint),
+          )
+        : CachedNetworkImage(
+            imageUrl: url,
+            fit: BoxFit.cover,
+            filterQuality: FilterQuality.high,
+            memCacheWidth: cacheDim,
+            memCacheHeight: cacheDim,
+            placeholder: (_, __) => ColoredBox(color: t.surfaceSunken),
+            errorWidget: (_, __, ___) => ColoredBox(
+              color: t.surfaceSunken,
+              child: Icon(Icons.music_note, color: t.inkFaint),
+            ),
+          );
+    // Only the clip radius changes per frame; the image is built once.
+    return AnimatedBuilder(
+      animation: animation,
+      child: cover,
+      builder: (context, child) => ClipRRect(
+        borderRadius: BorderRadius.circular(
+          ui.lerpDouble(12, SwissTokens.radiusLg, animation.value)!,
+        ),
+        child: child,
+      ),
+    );
+  }
+}
+
 class _TopBar extends StatelessWidget {
-  const _TopBar();
+  const _TopBar({
+    this.hasCanvas = false,
+    this.canvasActive = false,
+    this.isLoadingCanvas = false,
+    this.onToggleCanvas,
+  });
+
+  final bool hasCanvas;
+  final bool canvasActive;
+  final bool isLoadingCanvas;
+  final VoidCallback? onToggleCanvas;
 
   @override
   Widget build(BuildContext context) {
@@ -478,28 +858,105 @@ class _TopBar extends StatelessWidget {
           ),
           const SizedBox(width: SwissGrid.sm),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  state.sourceLabel.isEmpty
-                      ? 'NOW PLAYING'
-                      : 'NOW PLAYING // ${state.sourceLabel}',
-                  style: SwissType.micro.copyWith(color: t.inkFaint),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'MUSIFY PLAYER',
-                  style: SwissType.label.copyWith(
-                    color: t.accent,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
+            child: hasCanvas
+                ? Center(
+                    child: GestureDetector(
+                      onTap: onToggleCanvas,
+                      behavior: HitTestBehavior.opaque,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: canvasActive
+                              ? t.accent
+                              : t.surfaceSunken.withValues(alpha: 0.7),
+                          borderRadius:
+                              BorderRadius.circular(SwissTokens.radiusFull),
+                          border: Border.all(
+                            color: canvasActive ? t.accent : t.hairline,
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            LedDot(active: canvasActive, size: 6),
+                            const SizedBox(width: 6),
+                            Text(
+                              canvasActive ? 'CANVAS HD' : 'ALBUM ART',
+                              style: SwissType.micro.copyWith(
+                                color: canvasActive
+                                    ? t.accentInk
+                                    : t.inkMuted,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  )
+                : (isLoadingCanvas
+                    ? Center(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: t.surfaceSunken.withValues(alpha: 0.7),
+                            borderRadius:
+                                BorderRadius.circular(SwissTokens.radiusFull),
+                            border: Border.all(
+                              color: t.hairline,
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SizedBox(
+                                width: 8,
+                                height: 8,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 1.5,
+                                  color: t.accent,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                'LOADING HD VIDEO',
+                                style: SwissType.micro.copyWith(
+                                  color: t.inkMuted,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            state.sourceLabel.isEmpty
+                                ? 'NOW PLAYING'
+                                : 'NOW PLAYING // ${state.sourceLabel}',
+                            style: SwissType.micro.copyWith(color: t.inkFaint),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'MUSIFY PLAYER',
+                            style: SwissType.label.copyWith(
+                              color: t.accent,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      )),
           ),
           const SizedBox(width: SwissGrid.sm),
           TactileIconKeycap(

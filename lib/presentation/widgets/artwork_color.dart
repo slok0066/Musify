@@ -29,7 +29,13 @@ class ArtworkColorExtractor {
     if (_cache.containsKey(imageUrl)) return _cache[imageUrl]!;
 
     try {
-      final provider = CachedNetworkImageProvider(imageUrl);
+      // 64 px is plenty for one averaged pixel; a full-size decode just to
+      // read one colour cost frames on the Now Playing open.
+      final provider = CachedNetworkImageProvider(
+        imageUrl,
+        maxWidth: 64,
+        maxHeight: 64,
+      );
       final completer = Completer<ui.Image>();
       final stream = provider.resolve(ImageConfiguration.empty);
       late ImageStreamListener listener;

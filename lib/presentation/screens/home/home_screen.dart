@@ -110,7 +110,7 @@ class _Body extends StatelessWidget {
               state.filter == HomeFilter.offline)
             SliverToBoxAdapter(child: _QuickSongRail(state: state)),
           ..._sections(context, state),
-          const SliverToBoxAdapter(child: SizedBox(height: SwissGrid.xl)),
+          const SliverToBoxAdapter(child: SizedBox(height: 140)),
         ],
       ],
     );

@@ -179,53 +179,83 @@ class HomeCubit extends Cubit<HomeState> {
     _loading = true;
 
     _emitLocal();
-    emit(state.copyWith(refreshing: refresh, clearError: true));
+
+    // 1. INSTANT STALE-WHILE-REVALIDATE: show cached rails in 0ms on startup
+    final cached = _music.cachedHome;
+    if (cached != null && cached.hasData && !refresh) {
+      final cachedMixes = _music.cachedMixes ?? state.mixes;
+      final cachedSuggestions = _music.cachedSuggestions ?? state.suggestions;
+      emit(
+        state.copyWith(
+          status: HomeStatus.ready,
+          feed: cached,
+          mixes: cachedMixes,
+          suggestions: cachedSuggestions,
+          quickCards: _buildCards(feed: cached, mixes: cachedMixes),
+          clearError: true,
+        ),
+      );
+    } else {
+      emit(state.copyWith(refreshing: refresh, clearError: true));
+    }
 
     try {
-      final searches = _library.recentSearches();
-      final feedFuture = _music.loadHome(refresh: refresh);
-      final mixesFuture = _music.dailyMixes(
-        state.continueListening,
-        recentSearches: searches,
-      );
-      final suggestionsFuture = _music.searchSuggestions(
-        searches,
-        history: state.continueListening,
-      );
-
-      final homeResults = await Future.wait([
-        feedFuture,
-        mixesFuture,
-        suggestionsFuture,
-      ]);
-
-      final feed = homeResults[0] as HomeFeed;
-      final mixes = feed.isOffline
-          ? const <Collection>[]
-          : homeResults[1] as List<Collection>;
-      final suggestions = Track.dedupe(homeResults[2] as List<Track>);
-
+      // 2. Snappy primary feed load (launch payload + top searches concurrently)
+      final feed = await _music.loadHome(refresh: refresh);
       if (isClosed) return;
+
       emit(
         state.copyWith(
           status: feed.isOffline ? HomeStatus.offline : HomeStatus.ready,
           feed: feed,
-          mixes: mixes,
-          suggestions: suggestions,
-          quickCards: _buildCards(feed: feed, mixes: mixes),
+          quickCards: _buildCards(feed: feed, mixes: state.mixes),
           refreshing: false,
           clearError: true,
         ),
       );
-    } catch (e) {
+
+      // 3. Concurrently load secondary rails in the background
+      final searches = _library.recentSearches();
+      final secondaryResults = await Future.wait([
+        _music.dailyMixes(
+          state.continueListening,
+          recentSearches: searches,
+        ),
+        _music.searchSuggestions(
+          searches,
+          history: state.continueListening,
+        ),
+      ]);
+
       if (isClosed) return;
+      final mixes = feed.isOffline
+          ? const <Collection>[]
+          : secondaryResults[0] as List<Collection>;
+      final suggestions = Track.dedupe(secondaryResults[1] as List<Track>);
+
+      unawaited(_music.persistMixes(mixes));
+      unawaited(_music.persistSuggestions(suggestions));
+
       emit(
         state.copyWith(
-          status: HomeStatus.error,
-          refreshing: false,
-          errorText: 'COULD NOT REACH THE CATALOGUE',
+          mixes: mixes,
+          suggestions: suggestions,
+          quickCards: _buildCards(feed: feed, mixes: mixes),
         ),
       );
+    } catch (e) {
+      if (isClosed) return;
+      if (!state.feed.hasData) {
+        emit(
+          state.copyWith(
+            status: HomeStatus.error,
+            refreshing: false,
+            errorText: 'COULD NOT REACH THE CATALOGUE',
+          ),
+        );
+      } else {
+        emit(state.copyWith(refreshing: false));
+      }
     } finally {
       _loading = false;
     }

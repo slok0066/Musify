@@ -1,7 +1,10 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../core/theme/swiss_tokens.dart';
+import '../../core/theme/tactile_decorations.dart';
 import '../../services/service_locator.dart';
 import '../../services/settings_service.dart';
 import '../../services/update_service.dart';
@@ -11,6 +14,7 @@ import '../cubits/settings_cubit.dart';
 import '../screens/credits/full_credit_screen.dart';
 import '../screens/home/home_screen.dart';
 import '../screens/library/library_screen.dart';
+import '../screens/onboarding/artist_onboarding_screen.dart';
 import '../screens/onboarding/name_onboarding_screen.dart';
 import '../screens/search/search_screen.dart';
 import '../screens/settings/settings_screen.dart';
@@ -30,18 +34,27 @@ class MainShellScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final gate = context.select<
         SettingsCubit,
-        ({bool loaded, bool seenCredits, String userName})>(
+        ({
+          bool loaded,
+          bool seenCredits,
+          String userName,
+          List<String> selectedArtists,
+        })>(
       (c) => (
         loaded: c.state.loaded,
         seenCredits: c.state.settings.hasSeenCredits,
         userName: c.state.settings.userName,
+        selectedArtists: c.state.settings.selectedArtists,
       ),
     );
 
-    // Keep opening the name onboarding screen on launch until a name is given.
-    if (gate.loaded && gate.userName.trim().isEmpty) {
+    final needsName = gate.userName.trim().isEmpty;
+    final needsArtists = gate.selectedArtists.isEmpty;
+
+    // Keep opening onboarding on launch until name is given and artist selection is resolved.
+    if (gate.loaded && (needsName || needsArtists)) {
       return _FirstLaunchFlow(
-        initialStep: gate.seenCredits ? 1 : 0,
+        initialStep: !gate.seenCredits ? 0 : (needsName ? 1 : 2),
       );
     }
 
@@ -154,6 +167,7 @@ class _ChassisState extends State<_Chassis> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
+      extendBody: true,
       // LAW 5: the four screens own their own scrolling, so the shell never
       // lets a keyboard resize the whole stack.
       resizeToAvoidBottomInset: true,
@@ -193,8 +207,9 @@ class _TabStack extends StatelessWidget {
   }
 }
 
-/// One docked plane: the floating mini-player card over the nav bar, with a
-/// soft upward shadow instead of a hard edge.
+/// Docked bottom plane: the floating mini-player floats freely over content,
+/// and the navigation bar sits across the bottom edge with a Spotify-style
+/// translucent pure-black frosted backdrop.
 class _BottomDock extends StatelessWidget {
   const _BottomDock({required this.onTabSelected});
 
@@ -202,35 +217,17 @@ class _BottomDock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = SwissTokens.of(context);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: t.bg,
-        border: Border(
-          top: BorderSide(color: t.hairline.withValues(alpha: 0.5), width: 1),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: t.dropShadow.withValues(alpha: t.isDark ? 0.35 : 0.05),
-            blurRadius: 18,
-            spreadRadius: -6,
-            offset: const Offset(0, -6),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const RepaintBoundary(child: MiniPlayerBar()),
-          SwissNavBar(onTabSelected: onTabSelected),
-        ],
-      ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const RepaintBoundary(child: MiniPlayerBar()),
+        SwissNavBar(onTabSelected: onTabSelected),
+      ],
     );
   }
 }
 
-/// The 64 px navigation bar — icon over caps label; the live tab carries the
-/// signal colour.
+/// Translucent pure-black navigation bar with frosted backdrop blur (Spotify style).
 class SwissNavBar extends StatelessWidget {
   const SwissNavBar({this.onTabSelected, super.key});
 
@@ -241,28 +238,49 @@ class SwissNavBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final onSelected = onTabSelected;
 
-    return SafeArea(
-      top: false,
-      child: BlocBuilder<NavigationCubit, AppTab>(
-        builder: (context, current) {
-          return SizedBox(
-            height: SwissGrid.navBarHeight,
-            child: Row(
-              children: [
-                for (final tab in AppTab.values)
-                  Expanded(
-                    child: _NavItem(
-                      tab: tab,
-                      selected: tab == current,
-                      onTap: () => onSelected != null
-                          ? onSelected(tab)
-                          : context.read<NavigationCubit>().select(tab),
-                    ),
-                  ),
-              ],
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.55),
+            border: const Border(
+              top: BorderSide(
+                color: Color(0x14FFFFFF),
+                width: 0.5,
+              ),
             ),
-          );
-        },
+          ),
+          child: SafeArea(
+            top: false,
+            child: SizedBox(
+              height: 56,
+              child: BlocBuilder<NavigationCubit, AppTab>(
+                builder: (context, current) {
+                  return Row(
+                    children: [
+                      for (final tab in AppTab.values)
+                        Expanded(
+                          child: _NavItem(
+                            tab: tab,
+                            selected: tab == current,
+                            onTap: () {
+                              Haptics.tap();
+                              if (onSelected != null) {
+                                onSelected(tab);
+                              } else {
+                                context.read<NavigationCubit>().select(tab);
+                              }
+                            },
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -276,16 +294,16 @@ class _NavItem extends StatelessWidget {
   final VoidCallback onTap;
 
   static IconData _iconFor(AppTab tab) => switch (tab) {
-    AppTab.home => Icons.grid_view,
-    AppTab.search => Icons.search,
-    AppTab.library => Icons.folder_open,
-    AppTab.settings => Icons.settings,
+    AppTab.home => Icons.grid_view_rounded,
+    AppTab.search => Icons.search_rounded,
+    AppTab.library => Icons.folder_open_rounded,
+    AppTab.settings => Icons.settings_rounded,
   };
 
   @override
   Widget build(BuildContext context) {
     final t = SwissTokens.of(context);
-    final color = selected ? t.accent : t.inkFaint;
+    final color = selected ? t.ink : t.inkFaint;
 
     return Semantics(
       selected: selected,
@@ -303,18 +321,16 @@ class _NavItem extends StatelessWidget {
               child: Icon(_iconFor(tab), size: 21, color: color),
             ),
             const SizedBox(height: 3),
-            Flexible(
-              child: Text(
-                tab.label,
-                style: SwissType.label.copyWith(
-                  fontSize: 10,
-                  color: color,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                  letterSpacing: 0.9,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.clip,
+            Text(
+              tab.label,
+              style: SwissType.label.copyWith(
+                fontSize: 10,
+                color: color,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                letterSpacing: 0.6,
               ),
+              maxLines: 1,
+              overflow: TextOverflow.clip,
             ),
           ],
         ),
@@ -345,21 +361,30 @@ class _FirstLaunchFlowState extends State<_FirstLaunchFlow> {
   Widget build(BuildContext context) {
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 320),
-      child: _step == 0
-          ? FullCreditScreen(
-              key: const ValueKey('credits_step'),
-              onDismiss: () => setState(() => _step = 1),
-            )
-          : NameOnboardingScreen(
-              key: const ValueKey('name_step'),
-              initialName: context.read<SettingsCubit>().state.settings.userName,
-              onComplete: (name) {
-                final settings = context.read<SettingsCubit>();
-                settings.setUserName(name);
-                settings.setHasSeenCredits(true);
-                SettingsService.markCreditsSeenNow();
-              },
-            ),
+      child: switch (_step) {
+        0 => FullCreditScreen(
+            key: const ValueKey('credits_step'),
+            onDismiss: () => setState(() => _step = 1),
+          ),
+        1 => NameOnboardingScreen(
+            key: const ValueKey('name_step'),
+            initialName: context.read<SettingsCubit>().state.settings.userName,
+            onComplete: (name) {
+              final settings = context.read<SettingsCubit>();
+              settings.setUserName(name);
+              settings.setHasSeenCredits(true);
+              SettingsService.markCreditsSeenNow();
+              setState(() => _step = 2);
+            },
+          ),
+        _ => ArtistOnboardingScreen(
+            key: const ValueKey('artist_step'),
+            onComplete: (artists) {
+              final settings = context.read<SettingsCubit>();
+              settings.setSelectedArtists(artists);
+            },
+          ),
+      },
     );
   }
 }

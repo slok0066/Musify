@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
+import '../models/collection.dart';
 import '../models/track.dart';
 import '../models/user_playlist.dart';
 
@@ -259,6 +260,31 @@ class LocalStore {
       ...current.where((c) => c['id']?.toString() != id),
     ].take(8).toList();
     await _writeBox(collectionsBox, _collections, 'items', next);
+  }
+
+  /// Persistent Home Feed snapshot for instantaneous 0ms cold-start.
+  Map<String, dynamic>? readHomeFeedMap() {
+    final raw = _readBox(collectionsBox, _collections, 'home_feed_cache');
+    if (raw is Map) return raw.cast<String, dynamic>();
+    return null;
+  }
+
+  Future<void> writeHomeFeedMap(Map<String, dynamic> map) async {
+    await _writeBox(collectionsBox, _collections, 'home_feed_cache', map);
+  }
+
+  List<Collection> readCachedMixes() =>
+      Collection.listFrom(_readBox(collectionsBox, _collections, 'home_mixes_cache'));
+
+  Future<void> writeCachedMixes(List<Collection> mixes) async {
+    await _writeBox(collectionsBox, _collections, 'home_mixes_cache', Collection.listTo(mixes));
+  }
+
+  List<Track> readCachedSuggestions() =>
+      Track.listFrom(_readBox(collectionsBox, _collections, 'home_suggestions_cache'));
+
+  Future<void> writeCachedSuggestions(List<Track> suggestions) async {
+    await _writeBox(collectionsBox, _collections, 'home_suggestions_cache', Track.listTo(suggestions));
   }
 
 

@@ -83,6 +83,8 @@ class MusifySettings {
     this.hasSeenCredits = false,
     this.hasEnteredName = false,
     this.userName = '',
+    this.selectedArtists = const [],
+    this.canvasEnabled = true,
   });
 
   static const List<double> flatGains = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
@@ -133,6 +135,13 @@ class MusifySettings {
   /// User display name shown in home greeting.
   final String userName;
 
+  /// Selected favorite artists from onboarding for personalizing recommendations.
+  /// If skipped, contains `['skipped']`. If empty, onboarding has not completed.
+  final List<String> selectedArtists;
+
+  /// Fullscreen looping video canvas player behind player controls.
+  final bool canvasEnabled;
+
   MusifySettings copyWith({
     AudioQuality? wifiQuality,
     AudioQuality? mobileQuality,
@@ -156,6 +165,8 @@ class MusifySettings {
     bool? hasSeenCredits,
     bool? hasEnteredName,
     String? userName,
+    List<String>? selectedArtists,
+    bool? canvasEnabled,
   }) {
     return MusifySettings(
       wifiQuality: wifiQuality ?? this.wifiQuality,
@@ -180,6 +191,8 @@ class MusifySettings {
       hasSeenCredits: hasSeenCredits ?? this.hasSeenCredits,
       hasEnteredName: hasEnteredName ?? this.hasEnteredName,
       userName: userName ?? this.userName,
+      selectedArtists: selectedArtists ?? this.selectedArtists,
+      canvasEnabled: canvasEnabled ?? this.canvasEnabled,
     );
   }
 
@@ -206,6 +219,8 @@ class MusifySettings {
     'hasSeenCredits': hasSeenCredits,
     'hasEnteredName': hasEnteredName,
     'userName': userName,
+    'selectedArtists': selectedArtists,
+    'canvasEnabled': canvasEnabled,
   };
 
   static MusifySettings fromMap(Map<String, dynamic> map) {
@@ -267,6 +282,11 @@ class MusifySettings {
       hasSeenCredits: boolAt('hasSeenCredits', false),
       hasEnteredName: boolAt('hasEnteredName', false),
       userName: map['userName']?.toString() ?? '',
+      selectedArtists: (map['selectedArtists'] as List?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
+      canvasEnabled: boolAt('canvasEnabled', true),
     );
   }
 
@@ -293,6 +313,7 @@ class SettingsService extends ValueNotifier<MusifySettings> {
 
   static const String seenCreditsKey = 'musify_has_seen_credits_installed';
   static const String userNameKey = 'musify_user_name';
+  static const String selectedArtistsKey = 'musify_selected_artists';
 
   SharedPreferences? _prefs;
 
@@ -312,6 +333,7 @@ class SettingsService extends ValueNotifier<MusifySettings> {
   /// appear, so the race cannot be lost.
   static const String _launchMarker = 'musify.launched';
   static const String _userNameMarker = 'musify.user_name';
+  static const String _artistsMarker = 'musify.selected_artists';
 
   static Directory? _markerDir;
 
@@ -332,6 +354,35 @@ class SettingsService extends ValueNotifier<MusifySettings> {
       if (dir != null && name.trim().isNotEmpty) {
         final file = File('${dir.path}${Platform.pathSeparator}$_userNameMarker');
         file.writeAsStringSync(name.trim(), flush: true);
+      }
+    } catch (_) {}
+  }
+
+  static List<String> _readSelectedArtistsSync() {
+    try {
+      final dir = _markerDir;
+      if (dir != null) {
+        final file = File('${dir.path}${Platform.pathSeparator}$_artistsMarker');
+        if (file.existsSync()) {
+          final raw = file.readAsStringSync().trim();
+          if (raw.isNotEmpty) {
+            final decoded = jsonDecode(raw);
+            if (decoded is List) {
+              return decoded.map((e) => e.toString()).toList();
+            }
+          }
+        }
+      }
+    } catch (_) {}
+    return const [];
+  }
+
+  static void _writeSelectedArtistsSync(List<String> artists) {
+    try {
+      final dir = _markerDir;
+      if (dir != null && artists.isNotEmpty) {
+        final file = File('${dir.path}${Platform.pathSeparator}$_artistsMarker');
+        file.writeAsStringSync(jsonEncode(artists), flush: true);
       }
     } catch (_) {}
   }
@@ -357,8 +408,18 @@ class SettingsService extends ValueNotifier<MusifySettings> {
           ? loaded.userName.trim()
           : (prefName.isNotEmpty ? prefName : fileFlag);
 
+      final prefArtists = _prefs?.getStringList(selectedArtistsKey) ?? const <String>[];
+      final fileArtists = _readSelectedArtistsSync();
+      final resolvedArtists = loaded.selectedArtists.isNotEmpty
+          ? loaded.selectedArtists
+          : (prefArtists.isNotEmpty ? prefArtists : fileArtists);
+
       _loaded = true;
-      value = loaded.copyWith(hasSeenCredits: seen, userName: resolvedName);
+      value = loaded.copyWith(
+        hasSeenCredits: seen,
+        userName: resolvedName,
+        selectedArtists: resolvedArtists,
+      );
       // The gate must hear "the store was read" even when the value happens to
       // equal the defaults, which the notifier alone would swallow.
       notifyListeners();
@@ -369,6 +430,7 @@ class SettingsService extends ValueNotifier<MusifySettings> {
       value = const MusifySettings().copyWith(
         hasSeenCredits: firstLaunch == false,
         userName: fileFlag,
+        selectedArtists: _readSelectedArtistsSync(),
       );
       notifyListeners();
     }
@@ -433,6 +495,10 @@ class SettingsService extends ValueNotifier<MusifySettings> {
         await _prefs?.setString(userNameKey, value.userName.trim());
         _writeUserNameSync(value.userName.trim());
       }
+      if (value.selectedArtists.isNotEmpty) {
+        await _prefs?.setStringList(selectedArtistsKey, value.selectedArtists);
+        _writeSelectedArtistsSync(value.selectedArtists);
+      }
     } catch (e) {
       debugPrint('SettingsService persist failed: $e');
     }
@@ -448,5 +514,16 @@ class SettingsService extends ValueNotifier<MusifySettings> {
           .catchError((Object _) => false),
     );
     _writeUserNameSync(clean);
+  }
+
+  /// Synchronously stamps selected artists to disk and SharedPreferences immediately.
+  static void markSelectedArtistsNow(List<String> artists) {
+    if (artists.isEmpty) return;
+    unawaited(
+      SharedPreferences.getInstance()
+          .then((prefs) => prefs.setStringList(selectedArtistsKey, artists))
+          .catchError((Object _) => false),
+    );
+    _writeSelectedArtistsSync(artists);
   }
 }

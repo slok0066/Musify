@@ -145,6 +145,7 @@ class PlaybackService {
 
   bool _engineReady = false;
   bool _switching = false;
+  int _playGeneration = 0;
   bool _crossfading = false;
   bool _visualizerOn = false;
   bool _disposed = false;
@@ -1069,7 +1070,7 @@ class PlaybackService {
       return false;
     }
     if (resolved == null) return false;
-    if (_disposed) {
+    if (_disposed || currentTrack.value?.id != track.id) {
       resolved.session.release();
       return false;
     }
@@ -1089,6 +1090,10 @@ class PlaybackService {
     // the engine exactly as they arrive.
     final headEnd = math.min(128 * 1024, total);
     var head = await session.read(0, headEnd);
+    if (_disposed || currentTrack.value?.id != track.id) {
+      session.release();
+      return false;
+    }
     var index = head == null
         ? null
         : Mp4AacIndex.parse(
@@ -1444,14 +1449,20 @@ class PlaybackService {
 
   /// Loads and plays [queue.value][_queueIndex].
   Future<void> _startCurrent({bool prefetchAhead = false}) async {
+    final gen = ++_playGeneration;
     // Consumed on entry — before any guard — so the flag can never leak into
     // an unrelated start.
     final forceClassic = _forceClassicNextStart;
     _forceClassicNextStart = false;
 
+    // Drain any in-flight switch rather than dropping rapid skip requests.
+    while (_switching) {
+      await Future<void>.delayed(const Duration(milliseconds: 15));
+      if (_disposed || gen != _playGeneration) return;
+    }
+
     final list = queue.value;
-    if (list.isEmpty) return;
-    if (_switching) return;
+    if (list.isEmpty || _disposed || gen != _playGeneration) return;
 
     _switching = true;
     try {
@@ -1461,8 +1472,10 @@ class PlaybackService {
         errorText.value = 'AUDIO ENGINE UNAVAILABLE';
         return;
       }
+      if (_disposed || gen != _playGeneration) return;
 
       await _teardownVoice();
+      if (_disposed || gen != _playGeneration) return;
 
       currentTrack.value = track;
       position.value = Duration.zero;
@@ -1480,13 +1493,16 @@ class PlaybackService {
       // the download route: restarting the live stream at byte zero would undo
       // the position the user picked.
       if (!forceClassic && await _startProgressive(track)) {
+        if (_disposed || gen != _playGeneration) return;
         if (prefetchAhead && _settings.value.prefetchNext) {
           unawaited(_prefetchNext());
         }
         return;
       }
+      if (_disposed || gen != _playGeneration) return;
 
       final source = await _resolveFor(track);
+      if (_disposed || gen != _playGeneration) return;
       if (source == null) {
         final youTube = track.isYouTube;
         errorText.value = youTube
@@ -1497,7 +1513,7 @@ class PlaybackService {
         _switching = false;
         // A dead catalogue entry must not stall the queue. A YouTube failure
         // stays on screen so the test can see which source broke.
-        if (!youTube) await _autoSkipAfterFailure();
+        if (!youTube && gen == _playGeneration) await _autoSkipAfterFailure();
         return;
       }
 
@@ -1505,7 +1521,7 @@ class PlaybackService {
           ? await _soloud.loadFile(source.path, mode: LoadMode.disk)
           : await _soloud.loadUrl(source.path, mode: LoadMode.disk);
 
-      if (_disposed) {
+      if (_disposed || gen != _playGeneration) {
         await _soloud.disposeSource(loaded);
         return;
       }
@@ -1557,7 +1573,7 @@ class PlaybackService {
   Future<void> _autoSkipAfterFailure() async {
     if (queue.value.length <= 1) return;
     final next = _peekNextIndex();
-    if (next == null) return;
+    if (next == null || next <= _queueIndex) return;
     _queueIndex = next;
     queueIndex.value = next;
     // One retry only: a whole dead album should stop, not spin.

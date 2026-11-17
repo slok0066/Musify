@@ -163,4 +163,41 @@ void main() {
     expect(marker.existsSync(), isTrue,
         reason: 'the stamp must not wait on any asynchronous write');
   });
+
+  test('selectedArtists is empty on clean install and non-empty after select or skip', () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final fresh = SettingsService();
+    await fresh.load();
+    expect(fresh.value.selectedArtists, isEmpty);
+
+    // User skips artist onboarding
+    SettingsService.markSelectedArtistsNow(['skipped']);
+
+    final afterSkip = SettingsService();
+    await afterSkip.load();
+    expect(afterSkip.value.selectedArtists, contains('skipped'));
+    expect(afterSkip.value.selectedArtists, isNotEmpty);
+
+    // User selects specific artists
+    SettingsService.markSelectedArtistsNow(['Arijit Singh', 'The Weeknd', 'Diljit Dosanjh']);
+    final afterSelect = SettingsService();
+    await afterSelect.load();
+    expect(afterSelect.value.selectedArtists, ['Arijit Singh', 'The Weeknd', 'Diljit Dosanjh']);
+    expect(afterSelect.value.selectedArtists, isNotEmpty);
+  });
+
+  test('canvasEnabled defaults to true and survives copyWith and serialization', () {
+    const defaults = MusifySettings();
+    expect(defaults.canvasEnabled, isTrue);
+
+    final toggled = defaults.copyWith(canvasEnabled: false);
+    expect(toggled.canvasEnabled, isFalse);
+
+    final map = toggled.toMap();
+    expect(map['canvasEnabled'], isFalse);
+
+    final restored = MusifySettings.fromMap(map);
+    expect(restored.canvasEnabled, isFalse);
+  });
 }

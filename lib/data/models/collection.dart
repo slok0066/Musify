@@ -91,6 +91,60 @@ class Collection extends Equatable {
     );
   }
 
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'title': title,
+    'kind': kind.name,
+    'subtitle': subtitle,
+    'imageUrl': imageUrl,
+    'songCount': songCount,
+    'permaUrl': permaUrl,
+    'permaToken': permaToken,
+    'language': language,
+    'year': year,
+    'artistId': artistId,
+    'dominantColor': dominantColor,
+  };
+
+  static Collection? fromMap(Object? raw) {
+    if (raw is! Map) return null;
+    final map = raw.cast<Object?, Object?>();
+    final id = map['id']?.toString() ?? '';
+    final title = map['title']?.toString() ?? '';
+    if (id.isEmpty && title.isEmpty) return null;
+    final kindName = map['kind']?.toString() ?? 'playlist';
+    final kind = CollectionKind.values.firstWhere(
+      (k) => k.name == kindName,
+      orElse: () => CollectionKind.playlist,
+    );
+    final count = map['songCount'];
+    final yearVal = map['year'];
+    final colorVal = map['dominantColor'];
+
+    return Collection(
+      id: id,
+      title: title,
+      kind: kind,
+      subtitle: map['subtitle']?.toString() ?? '',
+      imageUrl: map['imageUrl']?.toString() ?? '',
+      songCount: count is int ? count : int.tryParse(count?.toString() ?? ''),
+      permaUrl: map['permaUrl']?.toString(),
+      permaToken: map['permaToken']?.toString(),
+      language: map['language']?.toString(),
+      year: yearVal is int ? yearVal : int.tryParse(yearVal?.toString() ?? ''),
+      artistId: map['artistId']?.toString(),
+      dominantColor: colorVal is int ? colorVal : int.tryParse(colorVal?.toString() ?? ''),
+    );
+  }
+
+  static List<Map<String, dynamic>> listTo(List<Collection> list) =>
+      list.map((c) => c.toMap()).toList();
+
+  static List<Collection> listFrom(Object? raw) {
+    if (raw is! List) return <Collection>[];
+    return raw.map(fromMap).whereType<Collection>().toList();
+  }
+
   @override
   List<Object?> get props => [id, title, kind, imageUrl, songCount, permaToken];
 }

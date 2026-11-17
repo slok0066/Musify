@@ -32,6 +32,11 @@ class SwissArtwork extends StatelessWidget {
   final IconData placeholderIcon;
   final Object? heroTag;
 
+  /// Decode size for a [size]-point box: 2.5× for sharpness, capped so a plate
+  /// never decodes a 2000 px image. Called by the Now Playing hero flight so
+  /// the flying cover shares the plate's decode instead of a second one.
+  static int cacheDimFor(double size) => (size * 2.5).round().clamp(96, 750);
+
   /// `medium` is the floor everywhere; a cover shown as a large plate (Now
   /// Playing) asks for `high`, because low-quality resampling is exactly what
   /// makes an upscaled 500px cover look blocky on a 3× screen.
@@ -48,7 +53,7 @@ class SwissArtwork extends StatelessWidget {
     // older build (or restored from a backup) can carry a 150×150 URL, and the
     // plate must not inherit that blur.
     final resolvedUrl = hiresArtwork(imageUrl);
-    final cacheDim = size != null ? (size! * 2.5).round().clamp(96, 750) : 500;
+    final cacheDim = size != null ? cacheDimFor(size!) : 500;
 
     Widget content = ClipRRect(
       borderRadius: circular
