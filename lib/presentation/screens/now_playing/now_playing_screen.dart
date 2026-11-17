@@ -94,14 +94,13 @@ class _FaceState extends State<_Face> with WidgetsBindingObserver {
   String? _loadedTrackId;
   bool _canvasVisible = true;
   bool _loadingVideo = false;
+  bool _hasCanvas = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     final track = widget.state.track;
-    // ignore: avoid_print
-    print('[CANVAS-UI] _FaceState.initState, track="${track?.title}"');
     if (track != null) {
       _loadCanvas(track);
     }
@@ -119,7 +118,7 @@ class _FaceState extends State<_Face> with WidgetsBindingObserver {
         _loadCanvas(currentTrack);
       }
     } else if (widget.state.isPlaying != oldWidget.state.isPlaying) {
-      if (widget.state.isPlaying) {
+      if (widget.state.isPlaying && _canvasVisible) {
         _videoController?.play();
       } else {
         _videoController?.pause();
@@ -131,6 +130,48 @@ class _FaceState extends State<_Face> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState lifecycle) {
     if (lifecycle == AppLifecycleState.resumed) {
       if (widget.state.isPlaying &&
+          _canvasVisible &&
+          _videoController?.value.isInitialized == true) {
+        _videoController?.play();
+      }
+    } else {
+      _videoController?.pause();
+    }
+  }
+
+  void _onVideoTick() {
+    if (!mounted) return;
+    final controller = _videoController;
+    if (controller == null) return;
+
+    // Gracefully fallback to album artwork on decoder errors
+    if (controller.value.hasError) {
+      debugPrint('[CANVAS-UI] Video player error: ${controller.value.errorDescription}');
+      if (_hasCanvas) {
+        setState(() {
+          _hasCanvas = false;
+        });
+      }
+      return;
+    }
+
+    // Auto-resume video if audio is running, canvas is turned on, but video stalled/paused
+    if (widget.state.isPlaying &&
+        _canvasVisible &&
+        controller.value.isInitialized &&
+        !controller.value.isPlaying &&
+        !controller.value.isBuffering) {
+      controller.play();
+    }
+  }
+
+  void _toggleCanvas() {
+    Haptics.tap();
+    setState(() {
+      _canvasVisible = !_canvasVisible;
+    });
+    if (_canvasVisible) {
+      if (widget.state.isPlaying &&
           _videoController?.value.isInitialized == true) {
         _videoController?.play();
       }
@@ -140,12 +181,8 @@ class _FaceState extends State<_Face> with WidgetsBindingObserver {
   }
 
   Future<void> _loadCanvas(Track track) async {
-    // ignore: avoid_print
-    print('[CANVAS-UI] _loadCanvas started for: "${track.title}"');
     final settings = context.read<SettingsCubit>().state.settings;
     if (!settings.canvasEnabled) {
-      // ignore: avoid_print
-      print('[CANVAS-UI] canvasEnabled is false in settings');
       return;
     }
 
@@ -153,12 +190,12 @@ class _FaceState extends State<_Face> with WidgetsBindingObserver {
     _loadedTrackId = trackId;
     setState(() {
       _loadingVideo = true;
+      _hasCanvas = false;
     });
 
+    VideoPlayerController? controller;
     try {
       final videoUrl = await locator<MusicRepository>().canvasFor(track);
-      // ignore: avoid_print
-      print('[CANVAS-UI] Received URL: $videoUrl');
       if (!mounted || _loadedTrackId != trackId || videoUrl == null) {
         if (mounted && _loadedTrackId == trackId) {
           setState(() {
@@ -170,78 +207,71 @@ class _FaceState extends State<_Face> with WidgetsBindingObserver {
 
       final isLocal =
           !videoUrl.startsWith('http://') && !videoUrl.startsWith('https://');
-      final controller = isLocal
+      controller = isLocal
           ? VideoPlayerController.file(
               File(videoUrl.startsWith('file://')
                   ? Uri.parse(videoUrl).toFilePath()
                   : videoUrl),
               videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+              viewType: VideoViewType.platformView,
             )
           : VideoPlayerController.networkUrl(
               Uri.parse(videoUrl),
               videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+              viewType: VideoViewType.platformView,
             );
 
-      // ignore: avoid_print
-      print('[CANVAS-UI] Initializing video controller for $videoUrl');
       await controller.initialize();
-      controller.setVolume(0.0); // Strictly muted to preserve SoLoud audio
+      await controller.setVolume(0.0); // Strictly muted to preserve SoLoud audio
+      await controller.setLooping(true); // ExoPlayer native seamless hardware looping
 
       final totalDur = controller.value.duration;
-      // Skip studio intro / credit scenes (e.g. T-Series, Zee Music, statutory disclaimers)
-      final startOffset = isLocal && totalDur.inSeconds > 25
-          ? const Duration(seconds: 18)
-          : (isLocal && totalDur.inSeconds > 15
-              ? const Duration(seconds: 10)
-              : Duration.zero);
-
-      if (startOffset > Duration.zero) {
-        await controller.seekTo(startOffset);
-        controller.setLooping(false);
-        controller.addListener(() {
-          final pos = controller.value.position;
-          final dur = controller.value.duration;
-          if (dur > Duration.zero &&
-              (pos >= dur || (dur - pos) <= const Duration(milliseconds: 400))) {
-            controller.seekTo(startOffset);
-            controller.play();
-          }
-        });
-      } else {
-        controller.setLooping(true);
+      // Skip studio intro / credit scenes if video is long enough (official music videos)
+      if (totalDur.inSeconds > 35) {
+        try {
+          await controller.seekTo(const Duration(seconds: 18));
+        } catch (_) {
+          // Seamlessly proceed from start if seek fails
+        }
       }
-      // ignore: avoid_print
-      print('[CANVAS-UI] Video controller initialized successfully! size: ${controller.value.size}');
 
       if (!mounted || _loadedTrackId != trackId) {
         controller.dispose();
         return;
       }
 
+      _videoController?.removeListener(_onVideoTick);
       _videoController?.dispose();
       _videoController = controller;
+      controller = null;
+      _hasCanvas = true;
       _loadingVideo = false;
 
-      if (widget.state.isPlaying) {
-        controller.play();
+      _videoController!.addListener(_onVideoTick);
+
+      if (widget.state.isPlaying && _canvasVisible) {
+        _videoController!.play();
       }
       setState(() {});
     } catch (e) {
-      // ignore: avoid_print
-      print('[CANVAS-UI] Error initializing canvas video: $e');
+      controller?.dispose();
+      debugPrint('[CANVAS-UI] Error initializing canvas video: $e');
       if (mounted && _loadedTrackId == trackId) {
         setState(() {
           _loadingVideo = false;
+          _hasCanvas = false;
         });
       }
     }
   }
 
   void _disposeVideo() {
+    _videoController?.removeListener(_onVideoTick);
     _videoController?.pause();
     _videoController?.dispose();
     _videoController = null;
     _loadedTrackId = null;
+    _hasCanvas = false;
   }
 
   @override
@@ -258,8 +288,10 @@ class _FaceState extends State<_Face> with WidgetsBindingObserver {
     final track = widget.state.track!;
     final state = widget.state;
 
-    final hasCanvas = _videoController != null &&
+    final hasCanvas = _hasCanvas &&
+        _videoController != null &&
         _videoController!.value.isInitialized &&
+        !_videoController!.value.hasError &&
         _videoController!.value.size.width > 0 &&
         _videoController!.value.size.height > 0;
     final showCanvas = hasCanvas && _canvasVisible;
@@ -338,12 +370,7 @@ class _FaceState extends State<_Face> with WidgetsBindingObserver {
                               hasCanvas: hasCanvas,
                               canvasActive: showCanvas,
                               isLoadingCanvas: _loadingVideo,
-                              onToggleCanvas: hasCanvas
-                                  ? () {
-                                      Haptics.tap();
-                                      setState(() => _canvasVisible = !_canvasVisible);
-                                    }
-                                  : null,
+                              onToggleCanvas: hasCanvas ? _toggleCanvas : null,
                             ),
                             const SizedBox(height: SwissGrid.md),
 
@@ -351,12 +378,7 @@ class _FaceState extends State<_Face> with WidgetsBindingObserver {
                               padding: const EdgeInsets.symmetric(
                                   horizontal: SwissGrid.gutter),
                               child: GestureDetector(
-                                onTap: hasCanvas
-                                    ? () {
-                                        Haptics.tap();
-                                        setState(() => _canvasVisible = !_canvasVisible);
-                                      }
-                                    : null,
+                                onTap: hasCanvas ? _toggleCanvas : null,
                                 behavior: HitTestBehavior.opaque,
                                 child: SizedBox(
                                   height: artSize,
@@ -839,8 +861,9 @@ class _TopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = SwissTokens.of(context);
-    final state = context.watch<PlayerCubit>().state;
-    final track = state.track;
+    final track = context.select<PlayerCubit, Track?>((c) => c.state.track);
+    final sourceLabel =
+        context.select<PlayerCubit, String>((c) => c.state.sourceLabel);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
@@ -883,7 +906,7 @@ class _TopBar extends StatelessWidget {
                             LedDot(active: canvasActive, size: 6),
                             const SizedBox(width: 6),
                             Text(
-                              canvasActive ? 'CANVAS HD' : 'ALBUM ART',
+                              canvasActive ? 'CANVAS ON' : 'CANVAS OFF',
                               style: SwissType.micro.copyWith(
                                 color: canvasActive
                                     ? t.accentInk
@@ -924,7 +947,7 @@ class _TopBar extends StatelessWidget {
                               ),
                               const SizedBox(width: 6),
                               Text(
-                                'LOADING HD VIDEO',
+                                'LOADING CANVAS',
                                 style: SwissType.micro.copyWith(
                                   color: t.inkMuted,
                                   fontWeight: FontWeight.w700,
@@ -940,9 +963,9 @@ class _TopBar extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            state.sourceLabel.isEmpty
+                            sourceLabel.isEmpty
                                 ? 'NOW PLAYING'
-                                : 'NOW PLAYING // ${state.sourceLabel}',
+                                : 'NOW PLAYING // $sourceLabel',
                             style: SwissType.micro.copyWith(color: t.inkFaint),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -981,8 +1004,8 @@ class _TopBar extends StatelessWidget {
                 : () => showTrackOptions(
                       context,
                       track,
-                      source: state.sourceLabel,
-                      queueContext: state.queue,
+                      source: sourceLabel,
+                      queueContext: context.read<PlayerCubit>().state.queue,
                     ),
           ),
         ],

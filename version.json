@@ -1,8 +1,8 @@
 {
-  "version": "3.0.0",
-  "build": 46,
-  "release_notes": "• Major v3.0.0 Release: Full HD Video Canvas Player (1080p Apple Music + 720p YouTube)\n• Lightning-Fast Parallel Video Staging: Sub-second load times via concurrent range downloads\n• Smart Credit & Intro Skipping: Automatically seeks past intro logos, statutory warnings, and credits\n• Repositioned Ergonomic Player Controls: Seamless thumb-reach transport controls grounded in lower zone\n• Enhanced Swiss-Minimalist Obsidian Interface: Maximum breathing room and edge-to-edge cinematic playback",
-  "download_url": "https://github.com/slok0066/Musify/releases/download/v3.0.0/app-arm64-v8a-release.apk",
-  "apk_url": "https://github.com/slok0066/Musify/releases/download/v3.0.0/app-arm64-v8a-release.apk",
+  "version": "3.1.0",
+  "build": 47,
+  "release_notes": "• Smooth Native Video Canvas Playback: Switched to hardware SurfaceView platform rendering to eliminate 15 FPS throttling and random frame stalls\n• Zero-Freeze 10–15s HD YouTube Canvas Loops: Downloads bounded HD DASH clips and losslessly remuxes them locally via Android MediaExtractor + MediaMuxer\n• Instant Per-Track Disk Cache: Reuses remuxed clips on repeat plays with zero network I/O\n• Reduced Now Playing UI Overhead: Eliminated 4×/sec overlay rebuilds over the live video canvas\n• Apple Music 1080p Canvas Preserved: Unchanged studio-grade playback",
+  "download_url": "https://github.com/slok0066/Musify/releases/download/v3.1.0/app-arm64-v8a-release.apk",
+  "apk_url": "https://github.com/slok0066/Musify/releases/download/v3.1.0/app-arm64-v8a-release.apk",
   "mandatory": false
 }

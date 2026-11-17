@@ -8,14 +8,14 @@
 ///
 /// Bump [kAppVersion]/[kAppBuild] whenever the version in `pubspec.yaml` moves,
 /// and refresh [kBuildStamp]/[kBuildTag] whenever a release APK is produced.
-const String kAppVersion = '3.0.0';
-const int kAppBuild = 46;
+const String kAppVersion = '3.1.0';
+const int kAppBuild = 47;
 
 /// Date (local) the release APK was produced.
-const String kBuildStamp = '2026-11-17';
+const String kBuildStamp = '2026-11-18';
 
 /// What is actually new in this build, in one word.
-const String kBuildTag = 'MAJOR-DOOMSDAY-V3';
+const String kBuildTag = 'SMOOTH-CANVAS-LOOP';
 
 const String kBuildLabel =
     'MUSIFY $kAppVersion+$kAppBuild // $kBuildTag · $kBuildStamp';
